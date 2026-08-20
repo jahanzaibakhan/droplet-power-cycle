@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Droplet Power Cycle</title>
+  <title>Cloud Power Cycle</title>
   <style>
     :root {
       color-scheme: dark;
@@ -16,6 +16,7 @@
       --chip: #2b3038;
       --accent: #4d8dff;
       --accent-hover: #6aa0ff;
+      --vultr: #51b9ff;
       --ok: #3dd68c;
       --ok-bg: #123526;
       --warn: #f5c16c;
@@ -40,14 +41,38 @@
       margin: 0 auto;
       padding: 2.75rem 1.25rem 3rem;
     }
+    .tabs {
+      display: flex;
+      gap: 0.45rem;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+    }
+    .tab {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 0.45rem 0.95rem;
+      font-size: 0.85rem;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .tab.active {
+      color: #071018;
+      border-color: transparent;
+    }
+    .tab.active[data-provider="digitalocean"] { background: var(--accent); }
+    .tab.active[data-provider="vultr"] { background: var(--vultr); }
+    .tab:disabled { opacity: 0.4; cursor: not-allowed; }
     .kicker {
-      color: var(--accent);
       font-size: 0.75rem;
       letter-spacing: 0.12em;
       text-transform: uppercase;
       font-weight: 700;
       margin: 0 0 0.55rem;
     }
+    .kicker.do { color: var(--accent); }
+    .kicker.vultr { color: var(--vultr); }
     h1 {
       font-size: 1.85rem;
       font-weight: 700;
@@ -114,7 +139,8 @@
     }
     button:disabled { opacity: 0.55; cursor: not-allowed; }
     .primary { background: var(--accent); color: #071018; }
-    .primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .primary.vultr { background: var(--vultr); }
+    .primary:hover:not(:disabled) { filter: brightness(1.08); }
     .ghost { background: #262b34; color: var(--text); }
     .danger { background: #8f2d32; color: #ffe9ea; }
     .okbtn { background: #1d6b45; color: #ddffe9; }
@@ -128,11 +154,7 @@
       display: none;
     }
     .panel.show { display: block; }
-    .panel h2 {
-      margin: 0 0 0.7rem;
-      font-size: 0.95rem;
-      font-weight: 650;
-    }
+    .panel h2 { margin: 0 0 0.7rem; font-size: 0.95rem; font-weight: 650; }
     .facts {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
@@ -163,8 +185,8 @@
       border-radius: 50%;
       background: currentColor;
     }
-    .pill.active { background: var(--ok-bg); color: var(--ok); }
-    .pill.off, .pill.archive { background: #2a2e36; color: #b7bec9; }
+    .pill.active, .pill.running { background: var(--ok-bg); color: var(--ok); }
+    .pill.off, .pill.stopped { background: #2a2e36; color: #b7bec9; }
     .pill.new { background: var(--warn-bg); color: var(--warn); }
     .status {
       margin-top: 1rem;
@@ -192,18 +214,23 @@
 </head>
 <body>
   <main>
-    <p class="kicker">DigitalOcean</p>
-    <h1>Droplet control</h1>
-    <p class="sub">Look up a droplet by public IPv4, then power cycle, stop, or start it. The API token never leaves the server.</p>
+    <div class="tabs" id="tabs">
+      <button type="button" class="tab active" data-provider="digitalocean">DigitalOcean</button>
+      <button type="button" class="tab" data-provider="vultr">Vultr</button>
+    </div>
+
+    <p class="kicker do" id="kicker">DigitalOcean</p>
+    <h1 id="title">Droplet control</h1>
+    <p class="sub" id="subtitle">Look up a server by public IPv4, then power cycle, stop, or start it.</p>
 
     <div class="card">
       <label for="ip">Public IPv4</label>
-      <input id="ip" type="text" list="droplet-options" placeholder="161.35.221.71" autocomplete="off" />
-      <datalist id="droplet-options"></datalist>
+      <input id="ip" type="text" list="server-options" placeholder="161.35.221.71" autocomplete="off" />
+      <datalist id="server-options"></datalist>
 
-      <div class="panel" id="droplet-panel">
-        <h2>Current droplet</h2>
-        <div class="facts" id="droplet-facts"></div>
+      <div class="panel" id="server-panel">
+        <h2 id="panel-title">Current droplet</h2>
+        <div class="facts" id="server-facts"></div>
       </div>
 
       <div class="row">
@@ -212,33 +239,83 @@
         <button class="okbtn" id="start-btn" type="button" data-action="start">Start</button>
         <button class="ghost" id="refresh-btn" type="button">Refresh list</button>
       </div>
-      <p class="meta" id="meta">Loading droplet list…</p>
+      <p class="meta" id="meta">Loading…</p>
       <div class="status" id="status" role="status"></div>
     </div>
-    <p class="footer">Droplet Power Cycle · <strong id="app-version">v…</strong></p>
+    <p class="footer">Cloud Power Cycle · <strong id="app-version">v…</strong></p>
   </main>
 
   <script>
+    const PROVIDERS = {
+      digitalocean: {
+        label: "DigitalOcean",
+        kickerClass: "do",
+        title: "Droplet control",
+        panelTitle: "Current droplet",
+        entity: "droplet",
+        listKey: "droplets",
+        listPath: () => "/api/droplets",
+        searchPath: (q) => "/api/droplets?q=" + encodeURIComponent(q),
+        instancePath: (ip) => "/api/droplet?ip=" + encodeURIComponent(ip),
+        refreshPath: () => "/api/refresh",
+        actionPath: () => "/api/action",
+        statusPath: (ctx) =>
+          "/api/action-status/" + encodeURIComponent(ctx.actionId) +
+          "?droplet_id=" + encodeURIComponent(ctx.resourceId) + "&t=" + Date.now(),
+        parseInstance: (data) => data.droplet,
+        parseList: (data) => data.droplets || [],
+        metaIndexing: "indexing DigitalOcean",
+      },
+      vultr: {
+        label: "Vultr",
+        kickerClass: "vultr",
+        title: "Instance control",
+        panelTitle: "Current instance",
+        entity: "instance",
+        listKey: "instances",
+        listPath: () => "/api/vultr/instances",
+        searchPath: (q) => "/api/vultr/instances?q=" + encodeURIComponent(q),
+        instancePath: (ip) => "/api/vultr/instance?ip=" + encodeURIComponent(ip),
+        refreshPath: () => "/api/vultr/refresh",
+        actionPath: () => "/api/vultr/action",
+        statusPath: (ctx) =>
+          "/api/vultr/action-status?instance_id=" + encodeURIComponent(ctx.resourceId) +
+          "&action=" + encodeURIComponent(ctx.action) +
+          "&started_at=" + encodeURIComponent(ctx.startedAt) + "&t=" + Date.now(),
+        parseInstance: (data) => data.instance,
+        parseList: (data) => data.instances || [],
+        metaIndexing: "indexing Vultr",
+      },
+    };
+
     const ipInput = document.getElementById("ip");
-    const datalist = document.getElementById("droplet-options");
+    const datalist = document.getElementById("server-options");
     const refreshBtn = document.getElementById("refresh-btn");
     const meta = document.getElementById("meta");
     const statusEl = document.getElementById("status");
-    const panel = document.getElementById("droplet-panel");
-    const facts = document.getElementById("droplet-facts");
+    const panel = document.getElementById("server-panel");
+    const facts = document.getElementById("server-facts");
+    const cycleBtn = document.getElementById("cycle-btn");
     const actionBtns = Array.from(document.querySelectorAll("[data-action]"));
+    const tabBtns = Array.from(document.querySelectorAll(".tab"));
 
     const ACTION_COPY = {
       power_cycle: { verb: "power cycle", doing: "Power cycling", done: "power cycle completed" },
-      stop: { verb: "stop", doing: "Stopping", done: "droplet powered off" },
-      start: { verb: "start", doing: "Starting", done: "droplet started" },
+      stop: { verb: "stop", doing: "Stopping", done: "powered off" },
+      start: { verb: "start", doing: "Starting", done: "started" },
     };
 
-    let droplets = [];
+    let provider = "digitalocean";
+    let enabled = { digitalocean: true, vultr: true };
+    let servers = [];
     let pollTimer = null;
     let suggestTimer = null;
     let lookupTimer = null;
     let busy = false;
+
+    function cfg() {
+      return PROVIDERS[provider];
+    }
 
     function showStatus(kind, text) {
       statusEl.className = "status show " + kind;
@@ -249,8 +326,8 @@
       busy = on;
       actionBtns.forEach((btn) => {
         btn.disabled = on;
-        if (btn.dataset.action === "power_cycle") btn.textContent = on && label ? label : "Power cycle";
       });
+      cycleBtn.textContent = on && label ? label : "Power cycle";
       refreshBtn.disabled = on;
     }
 
@@ -269,12 +346,12 @@
     }
 
     function lookupByIp(ip) {
-      return droplets.find((d) => d.ip === ip);
+      return servers.find((d) => d.ip === ip);
     }
 
     function renderDatalist() {
       datalist.innerHTML = "";
-      droplets.forEach((d) => {
+      servers.forEach((d) => {
         const opt = document.createElement("option");
         opt.value = d.ip;
         opt.label = d.name + " (" + d.ip + ")";
@@ -283,15 +360,28 @@
       });
     }
 
-    function renderDroplet(d) {
+    function statusPill(d) {
+      const p = provider === "vultr"
+        ? (d.power_status || d.status || "unknown")
+        : (d.status || "unknown");
+      const cls =
+        p === "active" || p === "running" ? "active running"
+        : p === "off" || p === "stopped" ? "off stopped"
+        : "new";
+      return '<span class="pill ' + cls + '">' + p + "</span>";
+    }
+
+    function renderServer(d) {
       if (!d) {
         panel.classList.remove("show");
         return;
       }
-      const pillClass = d.status === "active" ? "active" : d.status === "off" ? "off" : "new";
       facts.innerHTML =
         fact("Name", d.name) +
-        fact("Status", '<span class="pill ' + pillClass + '">' + (d.status || "unknown") + "</span>", true) +
+        fact("Status", statusPill(d), true) +
+        (provider === "vultr" && d.server_status
+          ? fact("Server", d.server_status)
+          : "") +
         fact("IP", '<span class="chip">' + (d.ip || "—") + "</span>", true) +
         fact("ID", d.id) +
         fact("Region", d.region || "—") +
@@ -307,100 +397,116 @@
       );
     }
 
-    async function loadDroplets() {
-      const res = await fetch("/api/droplets", { cache: "no-store" });
+    function applyProviderUi() {
+      const c = cfg();
+      document.getElementById("kicker").textContent = c.label;
+      document.getElementById("kicker").className = "kicker " + c.kickerClass;
+      document.getElementById("title").textContent = c.title;
+      document.getElementById("panel-title").textContent = c.panelTitle;
+      cycleBtn.classList.toggle("vultr", provider === "vultr");
+      tabBtns.forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.provider === provider);
+      });
+    }
+
+    async function loadList() {
+      const c = cfg();
+      const res = await fetch(c.listPath(), { cache: "no-store" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load droplets");
-      droplets = data.droplets || [];
+      if (!res.ok) throw new Error(data.error || "Failed to load list");
+      servers = c.parseList(data);
       renderDatalist();
-      const count = data.count != null ? data.count : droplets.length;
+      const count = data.count != null ? data.count : servers.length;
       const when = data.lastRefreshAt ? new Date(data.lastRefreshAt).toLocaleString() : "never";
       let line = count + " public IP(s) cached · last refresh " + when;
-      if (data.refreshing) line += " · still indexing DigitalOcean…";
+      if (data.refreshing) line += " · still " + c.metaIndexing + "…";
       if (data.knownTotal) line += " · account total " + data.knownTotal;
+      if (data.truncated) line += " · type to search by name or IP";
       if (data.lastRefreshError) line += " · last error: " + data.lastRefreshError;
       meta.textContent = line;
     }
 
     async function suggest(q) {
       if (!q || q.length < 2) return;
-      const res = await fetch("/api/droplets?q=" + encodeURIComponent(q), { cache: "no-store" });
+      const c = cfg();
+      const res = await fetch(c.searchPath(q), { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) return;
-      droplets = data.droplets || [];
+      servers = c.parseList(data);
       renderDatalist();
     }
 
-    async function loadDropletCard(ip) {
+    async function loadServerCard(ip) {
       if (!/^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(ip)) {
-        renderDroplet(null);
+        renderServer(null);
         return;
       }
-      const res = await fetch("/api/droplet?ip=" + encodeURIComponent(ip), { cache: "no-store" });
+      const c = cfg();
+      const res = await fetch(c.instancePath(ip), { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) {
-        renderDroplet(null);
+        renderServer(null);
         return;
       }
-      renderDroplet(data.droplet);
+      renderServer(c.parseInstance(data));
     }
 
     function actionSettled(kind, data, startedAt) {
       const status = String(data.status || "").toLowerCase().replace(/_/g, "-");
-      const dropletStatus = String(data.droplet_status || "").toLowerCase();
-      const elapsed = Date.now() - startedAt;
-      if (status === "completed" || status === "errored") return status;
-      if (elapsed < 8000) return null;
-      if ((kind === "power_cycle" || kind === "start") && dropletStatus === "active") {
-        return "completed";
+      if (provider === "vultr") {
+        if (status === "completed") return "completed";
+        if (Date.now() - startedAt > 180000) return "timeout";
+        return null;
       }
+      const dropletStatus = String(data.droplet_status || "").toLowerCase();
+      if (status === "completed" || status === "errored") return status;
+      if (Date.now() - startedAt < 8000) return null;
+      if ((kind === "power_cycle" || kind === "start") && dropletStatus === "active") return "completed";
       if (kind === "stop" && dropletStatus === "off") return "completed";
       return null;
     }
 
-    async function pollStatus(kind, actionId, dropletId, name, ip, startedAt) {
+    function resourceStatusLine(data) {
+      if (provider === "vultr") {
+        return "power: " + (data.power_status || "?") + " · server: " + (data.server_status || "?");
+      }
+      return "droplet: " + (data.droplet_status || "?");
+    }
+
+    async function pollStatus(kind, ctx, name, ip, startedAt) {
       const copy = ACTION_COPY[kind];
+      const c = cfg();
       try {
-        const res = await fetch(
-          "/api/action-status/" + encodeURIComponent(actionId) +
-          "?droplet_id=" + encodeURIComponent(dropletId) +
-          "&t=" + Date.now(),
-          { cache: "no-store" }
-        );
+        const res = await fetch(c.statusPath({ ...ctx, action: kind, startedAt }), { cache: "no-store" });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Status check failed");
 
         const settled = actionSettled(kind, data, startedAt);
-        const dropletStatus = data.droplet_status || "unknown";
         if (settled === "completed") {
           setBusy(false);
-          showStatus("ok", name + " (" + ip + ") " + copy.done + ".\nDroplet status: " + dropletStatus);
-          loadDropletCard(ip).catch(() => {});
+          showStatus("ok", name + " (" + ip + ") " + copy.done + ".\n" + resourceStatusLine(data));
+          loadServerCard(ip).catch(() => {});
           return;
         }
         if (settled === "errored") {
           setBusy(false);
           showStatus("err", name + " (" + ip + ") " + copy.verb + " errored.");
-          loadDropletCard(ip).catch(() => {});
+          loadServerCard(ip).catch(() => {});
           return;
         }
-        if (Date.now() - startedAt > 180000) {
+        if (settled === "timeout") {
           setBusy(false);
-          showStatus(
-            "warn",
-            copy.doing + " " + name + " is still " + (data.status || "in-progress") +
-            " after 3 minutes.\nCurrent droplet status: " + dropletStatus
-          );
-          loadDropletCard(ip).catch(() => {});
+          showStatus("warn", copy.doing + " " + name + " still in progress after 3 minutes.\n" + resourceStatusLine(data));
+          loadServerCard(ip).catch(() => {});
           return;
         }
 
         showStatus(
           "info",
           copy.doing + " " + name + " (" + ip + ")...\naction: " + (data.status || "in-progress") +
-          " · droplet: " + dropletStatus
+          " · " + resourceStatusLine(data)
         );
-        pollTimer = setTimeout(() => pollStatus(kind, actionId, dropletId, name, ip, startedAt), 2000);
+        pollTimer = setTimeout(() => pollStatus(kind, ctx, name, ip, startedAt), 2000);
       } catch (err) {
         setBusy(false);
         showStatus("err", err.message);
@@ -410,6 +516,7 @@
     async function runAction(kind) {
       const ip = currentIp();
       const copy = ACTION_COPY[kind];
+      const c = cfg();
       if (!ip) {
         showStatus("err", "Enter a public IPv4 address.");
         return;
@@ -418,20 +525,21 @@
       let known = lookupByIp(ip);
       if (!known) {
         try {
-          const look = await fetch("/api/droplets?q=" + encodeURIComponent(ip), { cache: "no-store" });
+          const look = await fetch(c.searchPath(ip), { cache: "no-store" });
           const lookData = await look.json();
-          known = (lookData.droplets || []).find((d) => d.ip === ip) || null;
+          known = c.parseList(lookData).find((d) => d.ip === ip) || null;
         } catch (_) {}
       }
-      const name = known ? known.name : "this droplet";
+      const name = known ? known.name : "this server";
       if (!confirm("Are you sure you want to " + copy.verb + " " + name + " (" + ip + ")?")) return;
 
       clearPoll();
+      const startedAt = Date.now();
       setBusy(true, copy.doing + "…");
       showStatus("info", "Starting " + copy.verb + " for " + name + " (" + ip + ")…");
 
       try {
-        const res = await fetch("/api/action", {
+        const res = await fetch(c.actionPath(), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           cache: "no-store",
@@ -440,17 +548,40 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Request failed");
 
-        const dropletName = data.droplet_name || name;
-        showStatus(
-          "info",
-          copy.doing + " " + dropletName + " (" + ip + ")...\nAction ID: " + data.action_id
-        );
-        pollStatus(kind, data.action_id, data.droplet_id, dropletName, ip, Date.now());
+        const serverName =
+          data.droplet_name || data.instance_name || (known && known.name) || "server";
+        const resourceId = data.droplet_id || data.instance_id;
+        const actionId = data.action_id || resourceId;
+        showStatus("info", copy.doing + " " + serverName + " (" + ip + ")…");
+        pollStatus(kind, { actionId, resourceId, startedAt }, serverName, ip, startedAt);
       } catch (err) {
         setBusy(false);
         showStatus("err", err.message);
       }
     }
+
+    function switchProvider(next) {
+      if (!enabled[next]) {
+        showStatus("err", PROVIDERS[next].label + " is not configured on this server.");
+        return;
+      }
+      provider = next;
+      servers = [];
+      renderDatalist();
+      renderServer(null);
+      clearPoll();
+      setBusy(false);
+      statusEl.className = "status";
+      applyProviderUi();
+      loadList().catch((err) => {
+        meta.textContent = "Could not load list.";
+        showStatus("err", err.message);
+      });
+    }
+
+    tabBtns.forEach((btn) => {
+      btn.addEventListener("click", () => switchProvider(btn.dataset.provider));
+    });
 
     actionBtns.forEach((btn) => {
       btn.addEventListener("click", () => runAction(btn.dataset.action));
@@ -460,11 +591,11 @@
       refreshBtn.disabled = true;
       refreshBtn.textContent = "Refreshing…";
       try {
-        const res = await fetch("/api/refresh", { method: "POST", cache: "no-store" });
+        const res = await fetch(cfg().refreshPath(), { method: "POST", cache: "no-store" });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Refresh failed");
-        showStatus("ok", "Droplet list refresh started.");
-        loadDroplets().catch(() => {});
+        showStatus("ok", "List refresh started.");
+        loadList().catch(() => {});
       } catch (err) {
         showStatus("err", err.message);
       } finally {
@@ -478,21 +609,29 @@
       clearTimeout(suggestTimer);
       clearTimeout(lookupTimer);
       suggestTimer = setTimeout(() => suggest(currentIp() || q).catch(() => {}), 250);
-      lookupTimer = setTimeout(() => loadDropletCard(currentIp()).catch(() => {}), 400);
-    });
-
-    loadDroplets().catch((err) => {
-      meta.textContent = "Could not load droplet list.";
-      showStatus("err", err.message);
+      lookupTimer = setTimeout(() => loadServerCard(currentIp()).catch(() => {}), 400);
     });
 
     fetch("/api/version", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         document.getElementById("app-version").textContent = "v" + (d.version || "?");
+        if (d.providers) {
+          enabled = d.providers;
+          tabBtns.forEach((btn) => {
+            btn.disabled = !enabled[btn.dataset.provider];
+          });
+          if (!enabled[provider]) {
+            provider = enabled.vultr ? "vultr" : "digitalocean";
+          }
+        }
+        applyProviderUi();
+        return loadList();
       })
-      .catch(() => {
-        document.getElementById("app-version").textContent = "v1.1.0";
+      .catch((err) => {
+        document.getElementById("app-version").textContent = "v1.2.0";
+        meta.textContent = "Could not load list.";
+        showStatus("err", err.message);
       });
   </script>
 </body>

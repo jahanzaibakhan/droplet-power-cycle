@@ -5,8 +5,11 @@ const fs = require("fs");
 const path = require("path");
 const express = require("express");
 
+const { createVultrProvider } = require("./providers/vultr");
+
 const DO_API = "https://api.digitalocean.com/v2";
-const TOKEN = process.env.DIGITALOCEAN_API_TOKEN;
+const DO_TOKEN = process.env.DIGITALOCEAN_API_TOKEN;
+const VULTR_TOKEN = process.env.VULTR_API_KEY;
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -15,10 +18,15 @@ const PAGE_CONCURRENCY = 2;
 const CACHE_FILE = path.join(__dirname, "data", "droplet-cache.json");
 const LIST_FULL_LIMIT = 400;
 
-if (!TOKEN || TOKEN === "your_token_here") {
-  console.error("Missing DIGITALOCEAN_API_TOKEN in .env");
+const HAS_DO = DO_TOKEN && DO_TOKEN !== "your_token_here";
+const HAS_VULTR = VULTR_TOKEN && VULTR_TOKEN !== "your_token_here";
+
+if (!HAS_DO && !HAS_VULTR) {
+  console.error("Configure DIGITALOCEAN_API_TOKEN and/or VULTR_API_KEY in .env");
   process.exit(1);
 }
+
+const vultr = HAS_VULTR ? createVultrProvider(VULTR_TOKEN) : null;
 
 /** @type {Map<string, { id: number, name: string }>} */
 const ipToDroplet = new Map();
@@ -80,7 +88,7 @@ function saveDiskCache() {
 
 function doHeaders() {
   return {
-    Authorization: `Bearer ${TOKEN}`,
+    Authorization: `Bearer ${DO_TOKEN}`,
     "Content-Type": "application/json",
     Accept: "application/json",
   };
@@ -378,21 +386,35 @@ app.use((req, res, next) => {
 const pkg = require("./package.json");
 
 app.get("/api/version", (_req, res) => {
-  res.json({ version: pkg.version, name: pkg.name });
+  res.json({
+    version: pkg.version,
+    name: pkg.name,
+    providers: { digitalocean: HAS_DO, vultr: HAS_VULTR },
+  });
 });
 
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
-    droplets: ipToDroplet.size,
-    knownTotal: cacheKnownTotal,
-    refreshing: Boolean(cacheRefreshing || refreshInFlight),
-    lastRefreshAt,
-    lastRefreshError,
+    providers: {
+      digitalocean: HAS_DO
+        ? {
+            droplets: ipToDroplet.size,
+            knownTotal: cacheKnownTotal,
+            refreshing: Boolean(cacheRefreshing || refreshInFlight),
+            lastRefreshAt,
+            lastRefreshError,
+          }
+        : null,
+      vultr: vultr ? vultr.health() : null,
+    },
   });
 });
 
 app.get("/api/droplets", async (req, res, next) => {
+  if (!HAS_DO) {
+    return res.status(503).json({ error: "DigitalOcean is not configured on this server." });
+  }
   try {
     const q = String(req.query.q || "").trim();
     const refreshing = Boolean(cacheRefreshing || refreshInFlight);
@@ -429,6 +451,9 @@ app.get("/api/droplets", async (req, res, next) => {
 });
 
 app.post("/api/refresh", (req, res) => {
+  if (!HAS_DO) {
+    return res.status(503).json({ error: "DigitalOcean is not configured on this server." });
+  }
   refreshCache().catch(() => {});
   res.json({
     ok: true,
@@ -441,6 +466,9 @@ app.post("/api/refresh", (req, res) => {
 });
 
 async function runDropletAction(req, res, next, requested) {
+  if (!HAS_DO) {
+    return res.status(503).json({ error: "DigitalOcean is not configured on this server." });
+  }
   try {
     const ip = parseIp(req.body && req.body.ip);
     if (!ip) {
@@ -495,6 +523,9 @@ async function runDropletAction(req, res, next, requested) {
 }
 
 app.get("/api/droplet", async (req, res, next) => {
+  if (!HAS_DO) {
+    return res.status(503).json({ error: "DigitalOcean is not configured on this server." });
+  }
   try {
     const ip = parseIp(req.query.ip);
     if (!ip || !IPV4.test(ip)) {
@@ -515,6 +546,9 @@ app.post("/api/reboot", (req, res, next) => runDropletAction(req, res, next, "po
 app.post("/api/action", (req, res, next) => runDropletAction(req, res, next, req.body && req.body.action));
 
 app.get("/api/action-status/:actionId", async (req, res, next) => {
+  if (!HAS_DO) {
+    return res.status(503).json({ error: "DigitalOcean is not configured on this server." });
+  }
   try {
     const actionId = String(req.params.actionId || "").trim();
     const dropletIdRaw = req.query.droplet_id || actionToDroplet.get(actionId);
@@ -561,6 +595,80 @@ app.get("/api/action-status/:actionId", async (req, res, next) => {
   }
 });
 
+if (vultr) {
+  app.get("/api/vultr/instances", async (req, res, next) => {
+    try {
+      const q = String(req.query.q || "").trim();
+      if (q && IPV4.test(q)) {
+        const found = await vultr.resolveByIp(q);
+        if (found) {
+          return res.json({
+            ...vultr.listResponse(""),
+            instances: [{ ip: q, id: found.id, name: found.name }],
+          });
+        }
+      }
+      res.json(vultr.listResponse(q));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post("/api/vultr/refresh", (_req, res) => {
+    vultr.refreshCache().catch(() => {});
+    res.json({ ok: true, started: true, ...vultr.health() });
+  });
+
+  app.get("/api/vultr/instance", async (req, res, next) => {
+    try {
+      const ip = parseIp(req.query.ip);
+      if (!ip || !IPV4.test(ip)) {
+        return res.status(400).json({ error: "Pass a valid ?ip= public IPv4 address." });
+      }
+      const found = await vultr.resolveByIp(ip);
+      if (!found) {
+        return res.status(404).json({ error: `No Vultr instance found with public IPv4 ${ip}.` });
+      }
+      const live = await vultr.fetchInstanceById(found.id);
+      res.json({ instance: vultr.summarize(live, ip) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post("/api/vultr/action", async (req, res, next) => {
+    try {
+      const ip = parseIp(req.body && req.body.ip);
+      if (!ip) {
+        return res.status(400).json({ error: "Missing ip. Send JSON { \"ip\": \"x.x.x.x\" }." });
+      }
+      if (!IPV4.test(ip)) {
+        return res.status(400).json({ error: `"${ip}" is not a valid IPv4 address.` });
+      }
+      const action = (req.body && req.body.action) || "power_cycle";
+      const result = await vultr.runAction(ip, action);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get("/api/vultr/action-status", async (req, res, next) => {
+    try {
+      const instanceId = String(req.query.instance_id || "").trim();
+      const action = String(req.query.action || "power_cycle").toLowerCase();
+      const startedAt = Number(req.query.started_at) || Date.now() - 10000;
+      if (!instanceId) {
+        return res.status(400).json({ error: "Missing instance_id query parameter." });
+      }
+      const live = await vultr.fetchInstanceById(instanceId);
+      res.json(vultr.getActionStatus(action, live, startedAt));
+    } catch (err) {
+      next(err);
+    }
+  });
+}
+
 app.use(
   express.static(path.join(__dirname, "public"), {
     setHeaders(res) {
@@ -584,21 +692,24 @@ app.use((err, _req, res, _next) => {
 });
 
 async function start() {
-  loadDiskCache();
+  if (HAS_DO) loadDiskCache();
+  if (vultr) vultr.loadDiskCache();
 
   app.listen(PORT, HOST, () => {
-    console.log(`Droplet reboot app listening on http://${HOST}:${PORT}`);
+    console.log(`Cloud control app listening on http://${HOST}:${PORT}`);
+    console.log(`Providers: DO=${HAS_DO} Vultr=${HAS_VULTR}`);
   });
 
-  try {
-    await refreshCache();
-  } catch (err) {
-    console.error("Initial droplet fetch failed (server will still start):", err.message);
+  if (HAS_DO) {
+    try {
+      await refreshCache();
+    } catch (err) {
+      console.error("Initial DO droplet fetch failed:", err.message);
+    }
+    setInterval(() => refreshCache().catch(() => {}), CACHE_TTL_MS).unref();
   }
 
-  setInterval(() => {
-    refreshCache().catch(() => {});
-  }, CACHE_TTL_MS).unref();
+  if (vultr) vultr.startBackgroundRefresh();
 }
 
 start();
