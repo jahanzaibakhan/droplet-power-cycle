@@ -638,6 +638,68 @@
     }
     .logs-empty.hidden { display: none; }
     .logs-wrap.hidden { display: none; }
+    .toast-stack {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      width: min(100%, 22rem);
+      pointer-events: none;
+    }
+    .toast {
+      pointer-events: auto;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+      box-shadow: 0 12px 40px var(--modal-shadow);
+      animation: toast-in 0.28s ease-out;
+    }
+    .toast.ok { border-left-color: var(--ok); }
+    .toast.err { border-left-color: var(--danger); }
+    .toast.warn { border-left-color: var(--warn); }
+    .toast-title {
+      font-weight: 700;
+      font-size: 0.92rem;
+      margin-bottom: 0.2rem;
+    }
+    .toast-body {
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.45;
+      font-family: var(--font-mono);
+    }
+    .toast-provider {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateX(1.25rem); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .tab.has-op::after {
+      content: "";
+      display: inline-block;
+      width: 0.42rem;
+      height: 0.42rem;
+      margin-left: 0.35rem;
+      border-radius: 50%;
+      background: var(--warn);
+      box-shadow: 0 0 0 2px var(--bg-elev);
+      vertical-align: middle;
+      animation: pulse-op 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse-op {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
   </style>
 </head>
 <body>
@@ -730,6 +792,8 @@
       <span id="session-note"></span>
     </p>
   </main>
+
+  <div class="toast-stack" id="toast-stack" aria-live="polite" aria-relevant="additions"></div>
 
   <div class="modal-backdrop" id="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -869,25 +933,32 @@
     const logsRefreshBtn = document.getElementById("logs-refresh");
     const controlView = document.getElementById("control-view");
     const logsView = document.getElementById("logs-view");
+    const toastStack = document.getElementById("toast-stack");
     const actionBtns = Array.from(document.querySelectorAll("[data-action]"));
     const tabBtns = Array.from(document.querySelectorAll(".tab[data-tab]"));
 
     const ACTION_COPY = {
-      power_cycle: { verb: "power cycle", doing: "Power cycling", done: "power cycle completed", title: "Power cycle server?" },
-      stop: { verb: "stop", doing: "Stopping", done: "powered off", title: "Stop server?" },
-      start: { verb: "start", doing: "Starting", done: "started", title: "Start server?" },
+      power_cycle: { verb: "power cycle", doing: "Power cycling", done: "Power cycle completed", title: "Power cycle server?" },
+      stop: { verb: "stop", doing: "Stopping", done: "Stop completed", title: "Stop server?" },
+      start: { verb: "start", doing: "Starting", done: "Start completed", title: "Start server?" },
     };
 
     let provider = "digitalocean";
     let activeTab = "digitalocean";
     let enabled = { digitalocean: true, vultr: true, linode: false };
     let servers = [];
-    let pollTimer = null;
     let suggestTimer = null;
     let lookupTimer = null;
-    let busy = false;
     let loadingDepth = 0;
+    let operationLoading = false;
     let modalResolve = null;
+
+    const providerPolls = {};
+    const providerSessions = {
+      digitalocean: { ip: "", servers: [], status: null, operation: null },
+      vultr: { ip: "", servers: [], status: null, operation: null },
+      linode: { ip: "", servers: [], status: null, operation: null },
+    };
 
     function cfg() {
       return PROVIDERS[provider];
@@ -941,58 +1012,155 @@
 
     setInterval(updateSessionNote, 60000);
 
-    function setLoading(on, message) {
-      if (on) {
-        loadingDepth += 1;
-        loadingText.textContent = message || "Loading…";
+    function setLoadingMessage(message) {
+      loadingText.textContent = message || "Loading…";
+    }
+
+    function refreshLoadingBar() {
+      if (loadingDepth > 0 || operationLoading) {
         loadingBar.classList.add("show");
         card.classList.add("is-loading");
       } else {
-        loadingDepth = Math.max(0, loadingDepth - 1);
-        if (loadingDepth === 0) {
-          loadingBar.classList.remove("show");
-          card.classList.remove("is-loading");
-        }
+        loadingBar.classList.remove("show");
+        card.classList.remove("is-loading");
       }
+    }
+
+    function setOperationLoading(on, message) {
+      operationLoading = on;
+      if (on && message) setLoadingMessage(message);
+      refreshLoadingBar();
+    }
+
+    function setLoading(on, message) {
+      if (on) {
+        loadingDepth += 1;
+        setLoadingMessage(message);
+      } else {
+        loadingDepth = Math.max(0, loadingDepth - 1);
+      }
+      refreshLoadingBar();
     }
 
     function showStatus(kind, text) {
       statusEl.className = "status show " + kind;
       statusEl.textContent = text;
+      providerSessions[provider].status = { kind, text };
     }
 
     function hideStatus() {
       statusEl.className = "status";
       statusEl.textContent = "";
+      providerSessions[provider].status = null;
     }
 
-    function setBusy(on, label) {
-      busy = on;
-      actionBtns.forEach((btn) => { btn.disabled = on; });
-      cycleBtn.textContent = on && label ? label : "Power cycle";
-      refreshBtn.disabled = on;
-      ipInput.disabled = on;
+    function providerOperationActive(prov) {
+      const op = providerSessions[prov] && providerSessions[prov].operation;
+      return Boolean(op && op.active);
+    }
+
+    function applyProviderBusyState() {
+      const op = providerSessions[provider].operation;
+      const isBusy = Boolean(op && op.active);
+      actionBtns.forEach((btn) => { btn.disabled = isBusy; });
+      cycleBtn.textContent = isBusy ? ACTION_COPY[op.kind].doing + "…" : "Power cycle";
+      refreshBtn.disabled = isBusy;
+      ipInput.disabled = isBusy;
       tabBtns.forEach((btn) => {
         const tab = btn.dataset.tab;
         if (tab === "logs") {
           btn.disabled = false;
           return;
         }
-        btn.disabled = on || !enabled[btn.dataset.provider];
+        const p = btn.dataset.provider;
+        if (p) btn.disabled = !enabled[p];
+        btn.classList.toggle("has-op", p ? providerOperationActive(p) : false);
       });
+    }
+
+    function saveCurrentProviderState() {
+      const sess = providerSessions[provider];
+      sess.ip = ipInput.value;
+      sess.servers = servers.slice();
+    }
+
+    function restoreProviderState(prov) {
+      const sess = providerSessions[prov];
+      ipInput.value = sess.ip || "";
+      servers = sess.servers || [];
+      renderDatalist();
+      applyProviderBusyState();
+      const op = sess.operation;
+      if (op && op.active) {
+        const copy = ACTION_COPY[op.kind];
+        const elapsed = Math.round((Date.now() - op.startedAt) / 1000);
+        const msg = copy.doing + " " + op.name + " — in progress (" + elapsed + "s)…";
+        setOperationLoading(true, msg);
+        showPanelLoading(msg);
+        if (sess.status) showStatus(sess.status.kind, sess.status.text);
+        else showStatus("info", copy.doing + " " + op.name + " (" + op.ip + ")…");
+      } else {
+        setOperationLoading(false);
+        if (sess.status) showStatus(sess.status.kind, sess.status.text);
+        else hideStatus();
+        const ip = currentIp();
+        if (ip) loadServerCard(ip).catch(() => {});
+        else renderServer(null);
+      }
+    }
+
+    function showToast(kind, title, body, prov) {
+      const el = document.createElement("div");
+      el.className = "toast " + (kind || "ok");
+      el.innerHTML =
+        '<div class="toast-provider">' + esc(PROVIDERS[prov].label) + "</div>" +
+        '<div class="toast-title">' + esc(title) + "</div>" +
+        (body ? '<div class="toast-body">' + esc(body) + "</div>" : "");
+      toastStack.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = "0";
+        el.style.transform = "translateX(1.25rem)";
+        el.style.transition = "opacity 0.25s, transform 0.25s";
+        setTimeout(() => el.remove(), 280);
+      }, 6000);
+    }
+
+    function clearProviderPoll(prov) {
+      if (providerPolls[prov]) {
+        clearTimeout(providerPolls[prov]);
+        delete providerPolls[prov];
+      }
+    }
+
+    function finishProviderOperation(prov, kind, outcome, name, ip, detail) {
+      const copy = ACTION_COPY[kind];
+      const sess = providerSessions[prov];
+      clearProviderPoll(prov);
+      if (sess.operation) sess.operation.active = false;
+      sess.operation = null;
+      applyProviderBusyState();
+      if (outcome === "completed") {
+        sess.status = { kind: "ok", text: name + " (" + ip + ") " + copy.done + ".\n" + detail };
+        showToast("ok", copy.done, name + " (" + ip + ")", prov);
+      } else if (outcome === "errored") {
+        sess.status = { kind: "err", text: name + " (" + ip + ") " + copy.verb + " errored." };
+        showToast("err", copy.verb + " failed", name + " (" + ip + ")", prov);
+      } else if (outcome === "timeout") {
+        sess.status = { kind: "warn", text: copy.doing + " " + name + " still in progress.\n" + detail };
+        showToast("warn", "Still in progress", name + " — check provider dashboard", prov);
+      }
+      if (prov === provider) {
+        setOperationLoading(false);
+        showStatus(sess.status.kind, sess.status.text);
+        loadServerCard(ip).catch(() => {});
+      }
+      loadLogs().catch(() => {});
     }
 
     function showPanelLoading(message) {
       panel.className = "panel loading show";
       panelTitle.textContent = cfg().panelTitle;
       facts.innerHTML = '<div class="spinner"></div><span>' + message + "</span>";
-    }
-
-    function clearPoll() {
-      if (pollTimer) {
-        clearTimeout(pollTimer);
-        pollTimer = null;
-      }
     }
 
     function currentIp() {
@@ -1312,7 +1480,7 @@
         if (!data.lastRefreshAt && count > 0) line += " · partial index (lookup by IP still works)";
         if (data.lastRefreshError) line += " · last error: " + data.lastRefreshError;
         meta.textContent = line;
-        if (!busy) hideStatus();
+        if (!providerOperationActive(provider)) hideStatus();
       } catch (err) {
         meta.textContent = "Could not load list.";
         const msg = String(err.message || "Network error");
@@ -1339,6 +1507,7 @@
     }
 
     async function loadServerCard(ip) {
+      if (providerOperationActive(provider)) return;
       if (!/^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(ip)) {
         renderServer(null);
         return;
@@ -1359,7 +1528,7 @@
           return;
         }
         renderServer(c.parseInstance(data));
-        if (!busy) hideStatus();
+        if (!providerOperationActive(provider)) hideStatus();
       } catch (err) {
         renderServer(null);
         showStatus("err", err.message);
@@ -1368,11 +1537,13 @@
       }
     }
 
-    function actionSettled(kind, data, startedAt) {
+    function actionSettled(kind, data, startedAt, prov) {
       const status = String(data.status || "").toLowerCase().replace(/_/g, "-");
-      if (isInstanceProvider()) {
+      const isInst = prov === "vultr" || prov === "linode";
+      if (isInst) {
         if (status === "completed") return "completed";
-        if (Date.now() - startedAt > 180000) return "timeout";
+        const maxMs = kind === "power_cycle" ? 300000 : 180000;
+        if (Date.now() - startedAt > maxMs) return "timeout";
         return null;
       }
       const dropletStatus = String(data.droplet_status || "").toLowerCase();
@@ -1383,56 +1554,64 @@
       return null;
     }
 
-    function resourceStatusLine(data) {
-      if (isInstanceProvider()) {
-        return "power: " + (data.power_status || "?") + " · server: " + (data.server_status || "?");
+    function resourceStatusLine(data, prov) {
+      if (prov === "vultr" || prov === "linode") {
+        const st = data.server_status || data.instance_status || data.power_status || "?";
+        return "status: " + st + " · power: " + (data.power_status || "?");
       }
       return "droplet: " + (data.droplet_status || "?");
     }
 
-    async function pollStatus(kind, ctx, name, ip, startedAt) {
+    async function pollProviderOperation(prov, kind, ctx, name, ip, startedAt) {
       const copy = ACTION_COPY[kind];
-      const c = cfg();
-      setLoading(true, copy.doing + " " + name + " — waiting for " + c.label + "…");
+      const c = PROVIDERS[prov];
+      const sess = providerSessions[prov];
+      const elapsed = Math.round((Date.now() - startedAt) / 1000);
+
       try {
         const res = await fetch(c.statusPath({ ...ctx, action: kind, startedAt }), { cache: "no-store" });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Status check failed");
 
-        const settled = actionSettled(kind, data, startedAt);
+        const settled = actionSettled(kind, data, startedAt, prov);
+        const detail = resourceStatusLine(data, prov);
+        const serverStat = data.server_status || data.instance_status || data.power_status || data.status || "in-progress";
+        const progressMsg = copy.doing + " " + name + " — " + serverStat + " (" + elapsed + "s)…";
+
         if (settled === "completed") {
-          setBusy(false);
-          setLoading(false);
-          showStatus("ok", name + " (" + ip + ") " + copy.done + ".\n" + resourceStatusLine(data));
-          loadServerCard(ip).catch(() => {});
-          loadLogs().catch(() => {});
+          finishProviderOperation(prov, kind, "completed", name, ip, detail);
           return;
         }
         if (settled === "errored") {
-          setBusy(false);
-          setLoading(false);
-          showStatus("err", name + " (" + ip + ") " + copy.verb + " errored.");
-          loadServerCard(ip).catch(() => {});
+          finishProviderOperation(prov, kind, "errored", name, ip, detail);
           return;
         }
         if (settled === "timeout") {
-          setBusy(false);
-          setLoading(false);
-          showStatus("warn", copy.doing + " " + name + " still in progress after 3 minutes.\n" + resourceStatusLine(data));
-          loadServerCard(ip).catch(() => {});
+          finishProviderOperation(prov, kind, "timeout", name, ip, detail);
           return;
         }
 
-        showStatus(
-          "info",
-          copy.doing + " " + name + " (" + ip + ")…\n" + resourceStatusLine(data)
+        const statusText = copy.doing + " " + name + " (" + ip + ")…\n" + detail;
+        sess.status = { kind: "info", text: statusText };
+        if (prov === provider) {
+          setOperationLoading(true, progressMsg);
+          showStatus("info", statusText);
+        }
+        providerPolls[prov] = setTimeout(
+          () => pollProviderOperation(prov, kind, ctx, name, ip, startedAt),
+          2000
         );
-        setLoading(true, copy.doing + " " + name + " — " + (data.status || "in-progress") + "…");
-        pollTimer = setTimeout(() => pollStatus(kind, ctx, name, ip, startedAt), 2000);
       } catch (err) {
-        setBusy(false);
-        setLoading(false);
-        showStatus("err", err.message);
+        clearProviderPoll(prov);
+        if (sess.operation) sess.operation.active = false;
+        sess.operation = null;
+        applyProviderBusyState();
+        sess.status = { kind: "err", text: err.message };
+        if (prov === provider) {
+          setOperationLoading(false);
+          showStatus("err", err.message);
+        }
+        showToast("err", "Operation error", err.message, prov);
       }
     }
 
@@ -1468,10 +1647,19 @@
       });
       if (!ok) return;
 
-      clearPoll();
+      clearProviderPoll(provider);
       const startedAt = Date.now();
-      setBusy(true, copy.doing + "…");
-      setLoading(true, "Sending " + copy.verb + " to " + c.label + "…");
+      const c = cfg();
+      providerSessions[provider].operation = {
+        kind,
+        ctx: null,
+        name,
+        ip,
+        startedAt,
+        active: true,
+      };
+      applyProviderBusyState();
+      setOperationLoading(true, "Sending " + copy.verb + " to " + c.label + "…");
       showStatus("info", "Sending " + copy.verb + " request…");
 
       try {
@@ -1487,12 +1675,23 @@
         const serverName = data.droplet_name || data.instance_name || name;
         const resourceId = data.droplet_id || data.instance_id;
         const actionId = data.action_id || resourceId;
+        const ctx = { actionId, resourceId, startedAt };
+        providerSessions[provider].operation = {
+          kind,
+          ctx,
+          name: serverName,
+          ip,
+          startedAt,
+          active: true,
+        };
+        applyProviderBusyState();
         showStatus("info", copy.doing + " " + serverName + " (" + ip + ")…");
         loadLogs().catch(() => {});
-        pollStatus(kind, { actionId, resourceId, startedAt }, serverName, ip, startedAt);
+        pollProviderOperation(provider, kind, ctx, serverName, ip, startedAt);
       } catch (err) {
-        setBusy(false);
-        setLoading(false);
+        providerSessions[provider].operation = null;
+        applyProviderBusyState();
+        setOperationLoading(false);
         showStatus("err", err.message);
       }
     }
@@ -1502,21 +1701,14 @@
         showStatus("err", PROVIDERS[next].label + " is not configured on this server.");
         return;
       }
+      saveCurrentProviderState();
+      provider = next;
       showControlView(next);
-      servers = [];
-      renderDatalist();
-      renderServer(null);
-      clearPoll();
-      setBusy(false);
-      hideStatus();
+      restoreProviderState(next);
       loadList()
-        .then(() => {
-          const ip = currentIp();
-          if (ip) return loadServerCard(ip);
-        })
         .catch((err) => {
           meta.textContent = "Could not load list.";
-          showStatus("err", err.message);
+          if (!providerOperationActive(provider)) showStatus("err", err.message);
         });
     }
 
@@ -1552,7 +1744,7 @@
         showStatus("err", err.message);
       } finally {
         setLoading(false);
-        refreshBtn.disabled = busy;
+        refreshBtn.disabled = providerOperationActive(provider);
         refreshBtn.textContent = "Refresh list";
       }
     });
@@ -1562,7 +1754,9 @@
       clearTimeout(suggestTimer);
       clearTimeout(lookupTimer);
       suggestTimer = setTimeout(() => suggest(currentIp() || q).catch(() => {}), 250);
-      lookupTimer = setTimeout(() => loadServerCard(currentIp()).catch(() => {}), 500);
+      lookupTimer = setTimeout(() => {
+        if (!providerOperationActive(provider)) loadServerCard(currentIp()).catch(() => {});
+      }, 500);
     });
 
     initSession();
@@ -1582,10 +1776,11 @@
           }
         }
         showControlView(provider);
+        if (!providerOperationActive(provider)) hideStatus();
         return loadList();
       })
       .catch((err) => {
-        document.getElementById("app-version").textContent = "v1.6.4";
+        document.getElementById("app-version").textContent = "v1.7.0";
         meta.textContent = "Could not load list.";
         showStatus("err", err.message);
       });

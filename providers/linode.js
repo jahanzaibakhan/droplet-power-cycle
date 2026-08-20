@@ -311,9 +311,15 @@ function createLinodeProvider(token) {
 
   function actionComplete(action, instance, elapsedMs) {
     const status = String(instance.status || "").toLowerCase();
-    if (action === "stop") return status === "offline" || status === "shutting_down";
-    if (elapsedMs < 8000) return false;
-    if (action === "power_cycle" || action === "start") {
+    if (action === "stop") {
+      return status === "offline" || status === "stopped" || status === "shutting_down";
+    }
+    if (action === "power_cycle") {
+      if (elapsedMs < 12000) return false;
+      return status === "running";
+    }
+    if (action === "start") {
+      if (elapsedMs < 8000) return false;
       return status === "running";
     }
     return false;
