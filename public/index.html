@@ -949,15 +949,24 @@
     let servers = [];
     let suggestTimer = null;
     let lookupTimer = null;
-    let loadingDepth = 0;
-    let operationLoading = false;
     let modalResolve = null;
+
+    function createProviderSession() {
+      return {
+        ip: "",
+        servers: [],
+        status: null,
+        operation: null,
+        loadingDepth: 0,
+        operationLoading: false,
+      };
+    }
 
     const providerPolls = {};
     const providerSessions = {
-      digitalocean: { ip: "", servers: [], status: null, operation: null },
-      vultr: { ip: "", servers: [], status: null, operation: null },
-      linode: { ip: "", servers: [], status: null, operation: null },
+      digitalocean: createProviderSession(),
+      vultr: createProviderSession(),
+      linode: createProviderSession(),
     };
 
     function cfg() {
@@ -1017,7 +1026,8 @@
     }
 
     function refreshLoadingBar() {
-      if (loadingDepth > 0 || operationLoading) {
+      const sess = providerSessions[provider];
+      if (sess.loadingDepth > 0 || sess.operationLoading) {
         loadingBar.classList.add("show");
         card.classList.add("is-loading");
       } else {
@@ -1026,32 +1036,44 @@
       }
     }
 
-    function setOperationLoading(on, message) {
-      operationLoading = on;
-      if (on && message) setLoadingMessage(message);
-      refreshLoadingBar();
-    }
-
-    function setLoading(on, message) {
-      if (on) {
-        loadingDepth += 1;
-        setLoadingMessage(message);
-      } else {
-        loadingDepth = Math.max(0, loadingDepth - 1);
+    function setOperationLoading(on, message, prov) {
+      const p = prov || provider;
+      const sess = providerSessions[p];
+      sess.operationLoading = on;
+      if (p === provider) {
+        if (on && message) setLoadingMessage(message);
+        refreshLoadingBar();
       }
-      refreshLoadingBar();
     }
 
-    function showStatus(kind, text) {
-      statusEl.className = "status show " + kind;
-      statusEl.textContent = text;
-      providerSessions[provider].status = { kind, text };
+    function setLoading(on, message, prov) {
+      const p = prov || provider;
+      const sess = providerSessions[p];
+      if (on) {
+        sess.loadingDepth += 1;
+        if (p === provider && message) setLoadingMessage(message);
+      } else {
+        sess.loadingDepth = Math.max(0, sess.loadingDepth - 1);
+      }
+      if (p === provider) refreshLoadingBar();
     }
 
-    function hideStatus() {
-      statusEl.className = "status";
-      statusEl.textContent = "";
-      providerSessions[provider].status = null;
+    function showStatus(kind, text, prov) {
+      const p = prov || provider;
+      providerSessions[p].status = { kind, text };
+      if (p === provider) {
+        statusEl.className = "status show " + kind;
+        statusEl.textContent = text;
+      }
+    }
+
+    function hideStatus(prov) {
+      const p = prov != null ? prov : provider;
+      providerSessions[p].status = null;
+      if (p === provider) {
+        statusEl.className = "status";
+        statusEl.textContent = "";
+      }
     }
 
     function providerOperationActive(prov) {
@@ -1095,16 +1117,18 @@
         const copy = ACTION_COPY[op.kind];
         const elapsed = Math.round((Date.now() - op.startedAt) / 1000);
         const msg = copy.doing + " " + op.name + " — in progress (" + elapsed + "s)…";
-        setOperationLoading(true, msg);
+        sess.operationLoading = true;
+        setLoadingMessage(msg);
+        refreshLoadingBar();
         showPanelLoading(msg);
-        if (sess.status) showStatus(sess.status.kind, sess.status.text);
-        else showStatus("info", copy.doing + " " + op.name + " (" + op.ip + ")…");
+        if (sess.status) showStatus(sess.status.kind, sess.status.text, prov);
+        else showStatus("info", copy.doing + " " + op.name + " (" + op.ip + ")…", prov);
       } else {
-        setOperationLoading(false);
-        if (sess.status) showStatus(sess.status.kind, sess.status.text);
-        else hideStatus();
+        refreshLoadingBar();
+        if (sess.status) showStatus(sess.status.kind, sess.status.text, prov);
+        else hideStatus(prov);
         const ip = currentIp();
-        if (ip) loadServerCard(ip).catch(() => {});
+        if (ip) loadServerCard(ip, prov).catch(() => {});
         else renderServer(null);
       }
     }
@@ -1138,6 +1162,7 @@
       clearProviderPoll(prov);
       if (sess.operation) sess.operation.active = false;
       sess.operation = null;
+      sess.operationLoading = false;
       applyProviderBusyState();
       if (outcome === "completed") {
         sess.status = { kind: "ok", text: name + " (" + ip + ") " + copy.done + ".\n" + detail };
@@ -1150,9 +1175,10 @@
         showToast("warn", "Still in progress", name + " — check provider dashboard", prov);
       }
       if (prov === provider) {
-        setOperationLoading(false);
-        showStatus(sess.status.kind, sess.status.text);
-        loadServerCard(ip).catch(() => {});
+        sess.operationLoading = false;
+        refreshLoadingBar();
+        showStatus(sess.status.kind, sess.status.text, prov);
+        loadServerCard(ip, prov).catch(() => {});
       }
       loadLogs().catch(() => {});
     }
@@ -1463,12 +1489,14 @@
       throw lastErr || new Error("Network request failed");
     }
 
-    async function loadList() {
-      const c = cfg();
-      setLoading(true, "Loading " + c.label + " server list…");
+    async function loadList(prov) {
+      const p = prov || provider;
+      const c = PROVIDERS[p];
+      setLoading(true, "Loading " + c.label + " server list…", p);
       try {
         const { res, data } = await fetchJson(c.listPath());
         if (!res.ok) throw new Error(data.error || "Failed to load list");
+        if (p !== provider) return;
         servers = c.parseList(data);
         renderDatalist();
         const count = data.count != null ? data.count : servers.length;
@@ -1480,19 +1508,21 @@
         if (!data.lastRefreshAt && count > 0) line += " · partial index (lookup by IP still works)";
         if (data.lastRefreshError) line += " · last error: " + data.lastRefreshError;
         meta.textContent = line;
-        if (!providerOperationActive(provider)) hideStatus();
+        if (!providerOperationActive(p)) hideStatus(p);
       } catch (err) {
+        if (p !== provider) return;
         meta.textContent = "Could not load list.";
         const msg = String(err.message || "Network error");
         showStatus(
           "err",
           msg === "Failed to fetch"
             ? "Could not reach the server. Wait a moment and switch tabs again, or hard-refresh the page."
-            : msg
+            : msg,
+          p
         );
         throw err;
       } finally {
-        setLoading(false);
+        setLoading(false, null, p);
       }
     }
 
@@ -1506,34 +1536,37 @@
       renderDatalist();
     }
 
-    async function loadServerCard(ip) {
-      if (providerOperationActive(provider)) return;
+    async function loadServerCard(ip, prov) {
+      const p = prov || provider;
+      if (providerOperationActive(p)) return;
       if (!/^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(ip)) {
-        renderServer(null);
+        if (p === provider) renderServer(null);
         return;
       }
-      const c = cfg();
-      showPanelLoading("Fetching " + ip + " from " + c.label + "…");
-      setLoading(true, "Contacting " + c.label + " API…");
+      const c = PROVIDERS[p];
+      if (p === provider) showPanelLoading("Fetching " + ip + " from " + c.label + "…");
+      setLoading(true, "Contacting " + c.label + " API…", p);
       try {
         const res = await fetch(c.instancePath(ip), { cache: "no-store" });
         const data = await res.json();
+        if (p !== provider) return;
         if (!res.ok) {
           renderServer(null);
           let msg = data.error || "Server not found on " + c.label + ".";
           if (res.status === 404 && /not found/i.test(msg)) {
             msg += "\nTip: this IP may belong to another provider tab (DigitalOcean / Vultr / Linode).";
           }
-          showStatus("err", msg);
+          showStatus("err", msg, p);
           return;
         }
         renderServer(c.parseInstance(data));
-        if (!providerOperationActive(provider)) hideStatus();
+        if (!providerOperationActive(p)) hideStatus(p);
       } catch (err) {
+        if (p !== provider) return;
         renderServer(null);
-        showStatus("err", err.message);
+        showStatus("err", err.message, p);
       } finally {
-        setLoading(false);
+        setLoading(false, null, p);
       }
     }
 
@@ -1593,9 +1626,11 @@
 
         const statusText = copy.doing + " " + name + " (" + ip + ")…\n" + detail;
         sess.status = { kind: "info", text: statusText };
+        sess.operationLoading = true;
         if (prov === provider) {
-          setOperationLoading(true, progressMsg);
-          showStatus("info", statusText);
+          setLoadingMessage(progressMsg);
+          refreshLoadingBar();
+          showStatus("info", statusText, prov);
         }
         providerPolls[prov] = setTimeout(
           () => pollProviderOperation(prov, kind, ctx, name, ip, startedAt),
@@ -1605,34 +1640,37 @@
         clearProviderPoll(prov);
         if (sess.operation) sess.operation.active = false;
         sess.operation = null;
+        sess.operationLoading = false;
         applyProviderBusyState();
         sess.status = { kind: "err", text: err.message };
         if (prov === provider) {
-          setOperationLoading(false);
-          showStatus("err", err.message);
+          sess.operationLoading = false;
+          refreshLoadingBar();
+          showStatus("err", err.message, prov);
         }
         showToast("err", "Operation error", err.message, prov);
       }
     }
 
     async function runAction(kind) {
+      const prov = provider;
       const ip = currentIp();
       const copy = ACTION_COPY[kind];
-      const c = cfg();
+      const c = PROVIDERS[prov];
       if (!ip) {
-        showStatus("err", "Enter a public IPv4 address.");
+        showStatus("err", "Enter a public IPv4 address.", prov);
         return;
       }
 
       let known = lookupByIp(ip);
       if (!known) {
-        setLoading(true, "Searching " + c.label + " for " + ip + "…");
+        setLoading(true, "Searching " + c.label + " for " + ip + "…", prov);
         try {
           const look = await fetch(c.searchPath(ip), { cache: "no-store" });
           const lookData = await look.json();
           known = c.parseList(lookData).find((d) => d.ip === ip) || null;
         } catch (_) {}
-        setLoading(false);
+        setLoading(false, null, prov);
       }
 
       const name = known ? known.name : "this server";
@@ -1647,10 +1685,9 @@
       });
       if (!ok) return;
 
-      clearProviderPoll(provider);
+      clearProviderPoll(prov);
       const startedAt = Date.now();
-      const c = cfg();
-      providerSessions[provider].operation = {
+      providerSessions[prov].operation = {
         kind,
         ctx: null,
         name,
@@ -1659,8 +1696,8 @@
         active: true,
       };
       applyProviderBusyState();
-      setOperationLoading(true, "Sending " + copy.verb + " to " + c.label + "…");
-      showStatus("info", "Sending " + copy.verb + " request…");
+      setOperationLoading(true, "Sending " + copy.verb + " to " + c.label + "…", prov);
+      showStatus("info", "Sending " + copy.verb + " request…", prov);
 
       try {
         const res = await fetch(c.actionPath(), {
@@ -1676,7 +1713,7 @@
         const resourceId = data.droplet_id || data.instance_id;
         const actionId = data.action_id || resourceId;
         const ctx = { actionId, resourceId, startedAt };
-        providerSessions[provider].operation = {
+        providerSessions[prov].operation = {
           kind,
           ctx,
           name: serverName,
@@ -1685,14 +1722,15 @@
           active: true,
         };
         applyProviderBusyState();
-        showStatus("info", copy.doing + " " + serverName + " (" + ip + ")…");
+        showStatus("info", copy.doing + " " + serverName + " (" + ip + ")…", prov);
         loadLogs().catch(() => {});
-        pollProviderOperation(provider, kind, ctx, serverName, ip, startedAt);
+        pollProviderOperation(prov, kind, ctx, serverName, ip, startedAt);
       } catch (err) {
-        providerSessions[provider].operation = null;
+        providerSessions[prov].operation = null;
         applyProviderBusyState();
-        setOperationLoading(false);
-        showStatus("err", err.message);
+        setOperationLoading(false, null, prov);
+        if (prov === provider) showStatus("err", err.message, prov);
+        else providerSessions[prov].status = { kind: "err", text: err.message };
       }
     }
 
@@ -1705,10 +1743,11 @@
       provider = next;
       showControlView(next);
       restoreProviderState(next);
-      loadList()
+      loadList(next)
         .catch((err) => {
+          if (provider !== next) return;
           meta.textContent = "Could not load list.";
-          if (!providerOperationActive(provider)) showStatus("err", err.message);
+          if (!providerOperationActive(next)) showStatus("err", err.message, next);
         });
     }
 
@@ -1730,32 +1769,36 @@
     });
 
     refreshBtn.addEventListener("click", async () => {
-      const c = cfg();
+      const prov = provider;
+      const c = PROVIDERS[prov];
       refreshBtn.disabled = true;
       refreshBtn.textContent = "Refreshing…";
-      setLoading(true, "Refreshing " + c.label + " index…");
+      setLoading(true, "Refreshing " + c.label + " index…", prov);
       try {
         const res = await fetch(c.refreshPath(), { method: "POST", cache: "no-store" });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Refresh failed");
-        showStatus("ok", c.label + " list refresh started.");
-        await loadList();
+        if (prov === provider) showStatus("ok", c.label + " list refresh started.", prov);
+        await loadList(prov);
       } catch (err) {
-        showStatus("err", err.message);
+        if (prov === provider) showStatus("err", err.message, prov);
       } finally {
-        setLoading(false);
-        refreshBtn.disabled = providerOperationActive(provider);
-        refreshBtn.textContent = "Refresh list";
+        setLoading(false, null, prov);
+        if (prov === provider) {
+          refreshBtn.disabled = providerOperationActive(prov);
+          refreshBtn.textContent = "Refresh list";
+        }
       }
     });
 
     ipInput.addEventListener("input", () => {
+      const prov = provider;
       const q = ipInput.value.trim();
       clearTimeout(suggestTimer);
       clearTimeout(lookupTimer);
       suggestTimer = setTimeout(() => suggest(currentIp() || q).catch(() => {}), 250);
       lookupTimer = setTimeout(() => {
-        if (!providerOperationActive(provider)) loadServerCard(currentIp()).catch(() => {});
+        if (prov === provider && !providerOperationActive(prov)) loadServerCard(currentIp(), prov).catch(() => {});
       }, 500);
     });
 
@@ -1780,7 +1823,7 @@
         return loadList();
       })
       .catch((err) => {
-        document.getElementById("app-version").textContent = "v1.7.0";
+        document.getElementById("app-version").textContent = "v1.7.1";
         meta.textContent = "Could not load list.";
         showStatus("err", err.message);
       });
