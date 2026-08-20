@@ -36,6 +36,7 @@
         var(--bg);
       color: var(--text);
     }
+    body.modal-open { overflow: hidden; }
     main {
       max-width: 44rem;
       margin: 0 auto;
@@ -57,10 +58,7 @@
       font-weight: 650;
       cursor: pointer;
     }
-    .tab.active {
-      color: #071018;
-      border-color: transparent;
-    }
+    .tab.active { color: #071018; border-color: transparent; }
     .tab.active[data-provider="digitalocean"] { background: var(--accent); }
     .tab.active[data-provider="vultr"] { background: var(--vultr); }
     .tab:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -98,8 +96,35 @@
       border: 1px solid var(--line);
       border-radius: 14px;
       padding: 1.35rem;
+      position: relative;
     }
-    label {
+    .card.is-loading { pointer-events: none; }
+    .card.is-loading .card-body { opacity: 0.72; }
+    .loading-bar {
+      display: none;
+      align-items: center;
+      gap: 0.65rem;
+      margin-bottom: 1rem;
+      padding: 0.75rem 0.9rem;
+      border-radius: 10px;
+      background: var(--info-bg);
+      border: 1px solid #243a5c;
+      color: var(--info);
+      font-size: 0.88rem;
+      font-weight: 550;
+    }
+    .loading-bar.show { display: flex; }
+    .spinner {
+      width: 1.1rem;
+      height: 1.1rem;
+      border: 2px solid rgba(158, 193, 255, 0.25);
+      border-top-color: var(--info);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    label.field-label {
       display: block;
       font-size: 0.78rem;
       font-weight: 700;
@@ -140,6 +165,7 @@
     button:disabled { opacity: 0.55; cursor: not-allowed; }
     .primary { background: var(--accent); color: #071018; }
     .primary.vultr { background: var(--vultr); }
+    .primary.danger { background: #c03943; color: #fff; }
     .primary:hover:not(:disabled) { filter: brightness(1.08); }
     .ghost { background: #262b34; color: var(--text); }
     .danger { background: #8f2d32; color: #ffe9ea; }
@@ -154,6 +180,14 @@
       display: none;
     }
     .panel.show { display: block; }
+    .panel.loading {
+      display: block;
+      color: var(--muted);
+      font-size: 0.88rem;
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+    }
     .panel h2 { margin: 0 0 0.7rem; font-size: 0.95rem; font-weight: 650; }
     .facts {
       display: grid;
@@ -208,8 +242,60 @@
       text-align: center;
       color: var(--muted);
       font-size: 0.78rem;
+      line-height: 1.5;
     }
     .footer strong { color: #c5ceda; font-weight: 600; }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(5, 8, 14, 0.72);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      z-index: 1000;
+    }
+    .modal-backdrop.show { display: flex; }
+    .modal {
+      width: min(100%, 26rem);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 1.35rem 1.35rem 1.15rem;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+    }
+    .modal h3 {
+      margin: 0 0 0.55rem;
+      font-size: 1.12rem;
+      font-weight: 700;
+    }
+    .modal p {
+      margin: 0 0 1rem;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 0.95rem;
+    }
+    .modal p strong { color: var(--text); font-weight: 650; }
+    .modal-check {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.55rem;
+      margin-bottom: 1.1rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+    .modal-check input {
+      margin-top: 0.15rem;
+      accent-color: var(--accent);
+    }
+    .modal-actions {
+      display: flex;
+      gap: 0.55rem;
+      justify-content: flex-end;
+    }
   </style>
 </head>
 <body>
@@ -223,37 +309,65 @@
     <h1 id="title">Droplet control</h1>
     <p class="sub" id="subtitle">Look up a server by public IPv4, then power cycle, stop, or start it.</p>
 
-    <div class="card">
-      <label for="ip">Public IPv4</label>
-      <input id="ip" type="text" list="server-options" placeholder="161.35.221.71" autocomplete="off" />
-      <datalist id="server-options"></datalist>
-
-      <div class="panel" id="server-panel">
-        <h2 id="panel-title">Current droplet</h2>
-        <div class="facts" id="server-facts"></div>
+    <div class="card" id="card">
+      <div class="loading-bar" id="loading-bar" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <span id="loading-text">Loading…</span>
       </div>
 
-      <div class="row">
-        <button class="primary" id="cycle-btn" type="button" data-action="power_cycle">Power cycle</button>
-        <button class="danger" id="stop-btn" type="button" data-action="stop">Stop</button>
-        <button class="okbtn" id="start-btn" type="button" data-action="start">Start</button>
-        <button class="ghost" id="refresh-btn" type="button">Refresh list</button>
+      <div class="card-body">
+        <label class="field-label" for="ip">Public IPv4</label>
+        <input id="ip" type="text" list="server-options" placeholder="161.35.221.71" autocomplete="off" />
+        <datalist id="server-options"></datalist>
+
+        <div class="panel" id="server-panel">
+          <h2 id="panel-title">Current droplet</h2>
+          <div class="facts" id="server-facts"></div>
+        </div>
+
+        <div class="row">
+          <button class="primary" id="cycle-btn" type="button" data-action="power_cycle">Power cycle</button>
+          <button class="danger" id="stop-btn" type="button" data-action="stop">Stop</button>
+          <button class="okbtn" id="start-btn" type="button" data-action="start">Start</button>
+          <button class="ghost" id="refresh-btn" type="button">Refresh list</button>
+        </div>
+        <p class="meta" id="meta">Loading…</p>
+        <div class="status" id="status" role="status"></div>
       </div>
-      <p class="meta" id="meta">Loading…</p>
-      <div class="status" id="status" role="status"></div>
     </div>
-    <p class="footer">Cloud Power Cycle · <strong id="app-version">v…</strong></p>
+
+    <p class="footer">
+      Cloud Power Cycle · <strong id="app-version">v…</strong><br />
+      <span id="session-note"></span>
+    </p>
   </main>
 
+  <div class="modal-backdrop" id="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h3 id="modal-title">Confirm action</h3>
+      <p id="modal-body"></p>
+      <label class="modal-check">
+        <input type="checkbox" id="modal-skip" />
+        <span>Don't show this warning again for 5 hours</span>
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="modal-cancel">Cancel</button>
+        <button type="button" class="primary" id="modal-confirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    const SESSION_MS = 5 * 60 * 60 * 1000;
+    const SESSION_KEY = "cpc_session_started";
+    const SKIP_CONFIRM_KEY = "cpc_skip_confirm";
+
     const PROVIDERS = {
       digitalocean: {
         label: "DigitalOcean",
         kickerClass: "do",
         title: "Droplet control",
         panelTitle: "Current droplet",
-        entity: "droplet",
-        listKey: "droplets",
         listPath: () => "/api/droplets",
         searchPath: (q) => "/api/droplets?q=" + encodeURIComponent(q),
         instancePath: (ip) => "/api/droplet?ip=" + encodeURIComponent(ip),
@@ -271,8 +385,6 @@
         kickerClass: "vultr",
         title: "Instance control",
         panelTitle: "Current instance",
-        entity: "instance",
-        listKey: "instances",
         listPath: () => "/api/vultr/instances",
         searchPath: (q) => "/api/vultr/instances?q=" + encodeURIComponent(q),
         instancePath: (ip) => "/api/vultr/instance?ip=" + encodeURIComponent(ip),
@@ -294,15 +406,26 @@
     const meta = document.getElementById("meta");
     const statusEl = document.getElementById("status");
     const panel = document.getElementById("server-panel");
+    const panelTitle = document.getElementById("panel-title");
     const facts = document.getElementById("server-facts");
     const cycleBtn = document.getElementById("cycle-btn");
+    const card = document.getElementById("card");
+    const loadingBar = document.getElementById("loading-bar");
+    const loadingText = document.getElementById("loading-text");
+    const modalBackdrop = document.getElementById("modal-backdrop");
+    const modalTitle = document.getElementById("modal-title");
+    const modalBody = document.getElementById("modal-body");
+    const modalSkip = document.getElementById("modal-skip");
+    const modalCancel = document.getElementById("modal-cancel");
+    const modalConfirm = document.getElementById("modal-confirm");
+    const sessionNote = document.getElementById("session-note");
     const actionBtns = Array.from(document.querySelectorAll("[data-action]"));
     const tabBtns = Array.from(document.querySelectorAll(".tab"));
 
     const ACTION_COPY = {
-      power_cycle: { verb: "power cycle", doing: "Power cycling", done: "power cycle completed" },
-      stop: { verb: "stop", doing: "Stopping", done: "powered off" },
-      start: { verb: "start", doing: "Starting", done: "started" },
+      power_cycle: { verb: "power cycle", doing: "Power cycling", done: "power cycle completed", title: "Power cycle server?" },
+      stop: { verb: "stop", doing: "Stopping", done: "powered off", title: "Stop server?" },
+      start: { verb: "start", doing: "Starting", done: "started", title: "Start server?" },
     };
 
     let provider = "digitalocean";
@@ -312,25 +435,82 @@
     let suggestTimer = null;
     let lookupTimer = null;
     let busy = false;
+    let loadingDepth = 0;
+    let modalResolve = null;
 
     function cfg() {
       return PROVIDERS[provider];
     }
 
-    let lookupBusy = false;
+    function initSession() {
+      const now = Date.now();
+      const started = Number(sessionStorage.getItem(SESSION_KEY) || 0);
+      if (!started || now - started >= SESSION_MS) {
+        sessionStorage.setItem(SESSION_KEY, String(now));
+        sessionStorage.removeItem(SKIP_CONFIRM_KEY);
+        updateSessionNote(true);
+        return true;
+      }
+      updateSessionNote(false);
+      return false;
+    }
+
+    function shouldSkipConfirm() {
+      initSession();
+      return sessionStorage.getItem(SKIP_CONFIRM_KEY) === "1";
+    }
+
+    function updateSessionNote(refreshed) {
+      const started = Number(sessionStorage.getItem(SESSION_KEY) || Date.now());
+      const left = Math.max(0, SESSION_MS - (Date.now() - started));
+      const hrs = Math.floor(left / 3600000);
+      const mins = Math.floor((left % 3600000) / 60000);
+      let line = "Session expires in " + hrs + "h " + mins + "m";
+      if (sessionStorage.getItem(SKIP_CONFIRM_KEY) === "1") line += " · confirmations skipped";
+      if (refreshed) line += " · session refreshed";
+      sessionNote.textContent = line;
+    }
+
+    setInterval(updateSessionNote, 60000);
+
+    function setLoading(on, message) {
+      if (on) {
+        loadingDepth += 1;
+        loadingText.textContent = message || "Loading…";
+        loadingBar.classList.add("show");
+        card.classList.add("is-loading");
+      } else {
+        loadingDepth = Math.max(0, loadingDepth - 1);
+        if (loadingDepth === 0) {
+          loadingBar.classList.remove("show");
+          card.classList.remove("is-loading");
+        }
+      }
+    }
 
     function showStatus(kind, text) {
       statusEl.className = "status show " + kind;
       statusEl.textContent = text;
     }
 
+    function hideStatus() {
+      statusEl.className = "status";
+      statusEl.textContent = "";
+    }
+
     function setBusy(on, label) {
       busy = on;
-      actionBtns.forEach((btn) => {
-        btn.disabled = on;
-      });
+      actionBtns.forEach((btn) => { btn.disabled = on; });
       cycleBtn.textContent = on && label ? label : "Power cycle";
       refreshBtn.disabled = on;
+      ipInput.disabled = on;
+      tabBtns.forEach((btn) => { btn.disabled = on || !enabled[btn.dataset.provider]; });
+    }
+
+    function showPanelLoading(message) {
+      panel.className = "panel loading show";
+      panelTitle.textContent = cfg().panelTitle;
+      facts.innerHTML = '<div class="spinner"></div><span>' + message + "</span>";
     }
 
     function clearPoll() {
@@ -357,7 +537,6 @@
         const opt = document.createElement("option");
         opt.value = d.ip;
         opt.label = d.name + " (" + d.ip + ")";
-        opt.textContent = d.name + " (" + d.ip + ")";
         datalist.appendChild(opt);
       });
     }
@@ -374,21 +553,21 @@
     }
 
     function renderServer(d) {
+      panel.className = "panel show";
+      panelTitle.textContent = cfg().panelTitle;
       if (!d) {
         panel.classList.remove("show");
+        facts.innerHTML = "";
         return;
       }
       facts.innerHTML =
         fact("Name", d.name) +
         fact("Status", statusPill(d), true) +
-        (provider === "vultr" && d.server_status
-          ? fact("Server", d.server_status)
-          : "") +
+        (provider === "vultr" && d.server_status ? fact("Server", d.server_status) : "") +
         fact("IP", '<span class="chip">' + (d.ip || "—") + "</span>", true) +
         fact("ID", d.id) +
         fact("Region", d.region || "—") +
         fact("Size", d.size || "—");
-      panel.classList.add("show");
     }
 
     function fact(label, value, html) {
@@ -404,29 +583,74 @@
       document.getElementById("kicker").textContent = c.label;
       document.getElementById("kicker").className = "kicker " + c.kickerClass;
       document.getElementById("title").textContent = c.title;
-      document.getElementById("panel-title").textContent = c.panelTitle;
       cycleBtn.classList.toggle("vultr", provider === "vultr");
       tabBtns.forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.provider === provider);
       });
     }
 
+    function confirmAction(opts) {
+      if (shouldSkipConfirm()) return Promise.resolve(true);
+
+      return new Promise((resolve) => {
+        modalResolve = resolve;
+        modalTitle.textContent = opts.title || "Confirm action";
+        modalBody.innerHTML = opts.html || "";
+        modalSkip.checked = false;
+        modalConfirm.textContent = opts.confirmLabel || "Confirm";
+        modalConfirm.className = "primary" + (opts.danger ? " danger" : provider === "vultr" ? " vultr" : "");
+        modalBackdrop.classList.add("show");
+        modalBackdrop.setAttribute("aria-hidden", "false");
+        document.body.classList.add("modal-open");
+        modalConfirm.focus();
+      });
+    }
+
+    function closeModal(result) {
+      if (modalSkip.checked && result) {
+        sessionStorage.setItem(SKIP_CONFIRM_KEY, "1");
+        updateSessionNote(false);
+      }
+      modalBackdrop.classList.remove("show");
+      modalBackdrop.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("modal-open");
+      if (modalResolve) {
+        modalResolve(result);
+        modalResolve = null;
+      }
+    }
+
+    modalCancel.addEventListener("click", () => closeModal(false));
+    modalConfirm.addEventListener("click", () => closeModal(true));
+    modalBackdrop.addEventListener("click", (e) => {
+      if (e.target === modalBackdrop) closeModal(false);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (!modalBackdrop.classList.contains("show")) return;
+      if (e.key === "Escape") closeModal(false);
+    });
+
     async function loadList() {
       const c = cfg();
-      const res = await fetch(c.listPath(), { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load list");
-      servers = c.parseList(data);
-      renderDatalist();
-      const count = data.count != null ? data.count : servers.length;
-      const when = data.lastRefreshAt ? new Date(data.lastRefreshAt).toLocaleString() : "never";
-      let line = count + " public IP(s) cached · last refresh " + when;
-      if (data.refreshing) line += " · still " + c.metaIndexing + "…";
-      if (data.knownTotal) line += " · account total " + data.knownTotal;
-      if (data.truncated) line += " · type to search by name or IP";
-      if (!data.lastRefreshAt && count > 0) line += " · partial index (lookup by IP still works)";
-      if (data.lastRefreshError) line += " · last error: " + data.lastRefreshError;
-      meta.textContent = line;
+      setLoading(true, "Loading " + c.label + " server list…");
+      try {
+        const res = await fetch(c.listPath(), { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load list");
+        servers = c.parseList(data);
+        renderDatalist();
+        const count = data.count != null ? data.count : servers.length;
+        const when = data.lastRefreshAt ? new Date(data.lastRefreshAt).toLocaleString() : "never";
+        let line = count + " public IP(s) cached · last refresh " + when;
+        if (data.refreshing) line += " · still " + c.metaIndexing + "…";
+        if (data.knownTotal) line += " · account total " + data.knownTotal;
+        if (data.truncated) line += " · type to search by name or IP";
+        if (!data.lastRefreshAt && count > 0) line += " · partial index (lookup by IP still works)";
+        if (data.lastRefreshError) line += " · last error: " + data.lastRefreshError;
+        meta.textContent = line;
+      } finally {
+        setLoading(false);
+      }
     }
 
     async function suggest(q) {
@@ -445,23 +669,23 @@
         return;
       }
       const c = cfg();
-      lookupBusy = true;
-      showStatus("info", "Looking up " + ip + " on " + c.label + "…");
+      showPanelLoading("Fetching " + ip + " from " + c.label + "…");
+      setLoading(true, "Contacting " + c.label + " API…");
       try {
         const res = await fetch(c.instancePath(ip), { cache: "no-store" });
         const data = await res.json();
         if (!res.ok) {
           renderServer(null);
-          showStatus("err", data.error || "Instance not found on " + c.label + ".");
+          showStatus("err", data.error || "Server not found on " + c.label + ".");
           return;
         }
         renderServer(c.parseInstance(data));
-        if (!busy) statusEl.className = "status";
+        if (!busy) hideStatus();
       } catch (err) {
         renderServer(null);
         showStatus("err", err.message);
       } finally {
-        lookupBusy = false;
+        setLoading(false);
       }
     }
 
@@ -490,6 +714,7 @@
     async function pollStatus(kind, ctx, name, ip, startedAt) {
       const copy = ACTION_COPY[kind];
       const c = cfg();
+      setLoading(true, copy.doing + " " + name + " — waiting for " + c.label + "…");
       try {
         const res = await fetch(c.statusPath({ ...ctx, action: kind, startedAt }), { cache: "no-store" });
         const data = await res.json();
@@ -498,18 +723,21 @@
         const settled = actionSettled(kind, data, startedAt);
         if (settled === "completed") {
           setBusy(false);
+          setLoading(false);
           showStatus("ok", name + " (" + ip + ") " + copy.done + ".\n" + resourceStatusLine(data));
           loadServerCard(ip).catch(() => {});
           return;
         }
         if (settled === "errored") {
           setBusy(false);
+          setLoading(false);
           showStatus("err", name + " (" + ip + ") " + copy.verb + " errored.");
           loadServerCard(ip).catch(() => {});
           return;
         }
         if (settled === "timeout") {
           setBusy(false);
+          setLoading(false);
           showStatus("warn", copy.doing + " " + name + " still in progress after 3 minutes.\n" + resourceStatusLine(data));
           loadServerCard(ip).catch(() => {});
           return;
@@ -517,12 +745,13 @@
 
         showStatus(
           "info",
-          copy.doing + " " + name + " (" + ip + ")...\naction: " + (data.status || "in-progress") +
-          " · " + resourceStatusLine(data)
+          copy.doing + " " + name + " (" + ip + ")…\n" + resourceStatusLine(data)
         );
+        setLoading(true, copy.doing + " " + name + " — " + (data.status || "in-progress") + "…");
         pollTimer = setTimeout(() => pollStatus(kind, ctx, name, ip, startedAt), 2000);
       } catch (err) {
         setBusy(false);
+        setLoading(false);
         showStatus("err", err.message);
       }
     }
@@ -538,19 +767,32 @@
 
       let known = lookupByIp(ip);
       if (!known) {
+        setLoading(true, "Searching " + c.label + " for " + ip + "…");
         try {
           const look = await fetch(c.searchPath(ip), { cache: "no-store" });
           const lookData = await look.json();
           known = c.parseList(lookData).find((d) => d.ip === ip) || null;
         } catch (_) {}
+        setLoading(false);
       }
+
       const name = known ? known.name : "this server";
-      if (!confirm("Are you sure you want to " + copy.verb + " " + name + " (" + ip + ")?")) return;
+      const ok = await confirmAction({
+        title: copy.title,
+        html:
+          "Are you sure you want to <strong>" + copy.verb + "</strong><br /><br />" +
+          "<strong>" + name + "</strong><br /><code>" + ip + "</code><br /><br />" +
+          "Provider: " + c.label,
+        confirmLabel: copy.title.replace("?", ""),
+        danger: kind === "stop" || kind === "power_cycle",
+      });
+      if (!ok) return;
 
       clearPoll();
       const startedAt = Date.now();
       setBusy(true, copy.doing + "…");
-      showStatus("info", "Resolving " + ip + " on " + c.label + "…");
+      setLoading(true, "Sending " + copy.verb + " to " + c.label + "…");
+      showStatus("info", "Sending " + copy.verb + " request…");
 
       try {
         const res = await fetch(c.actionPath(), {
@@ -562,14 +804,14 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Request failed");
 
-        const serverName =
-          data.droplet_name || data.instance_name || (known && known.name) || "server";
+        const serverName = data.droplet_name || data.instance_name || name;
         const resourceId = data.droplet_id || data.instance_id;
         const actionId = data.action_id || resourceId;
         showStatus("info", copy.doing + " " + serverName + " (" + ip + ")…");
         pollStatus(kind, { actionId, resourceId, startedAt }, serverName, ip, startedAt);
       } catch (err) {
         setBusy(false);
+        setLoading(false);
         showStatus("err", err.message);
       }
     }
@@ -585,7 +827,7 @@
       renderServer(null);
       clearPoll();
       setBusy(false);
-      statusEl.className = "status";
+      hideStatus();
       applyProviderUi();
       loadList()
         .then(() => {
@@ -607,17 +849,20 @@
     });
 
     refreshBtn.addEventListener("click", async () => {
+      const c = cfg();
       refreshBtn.disabled = true;
       refreshBtn.textContent = "Refreshing…";
+      setLoading(true, "Refreshing " + c.label + " index…");
       try {
-        const res = await fetch(cfg().refreshPath(), { method: "POST", cache: "no-store" });
+        const res = await fetch(c.refreshPath(), { method: "POST", cache: "no-store" });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Refresh failed");
-        showStatus("ok", "List refresh started.");
-        loadList().catch(() => {});
+        showStatus("ok", c.label + " list refresh started.");
+        await loadList();
       } catch (err) {
         showStatus("err", err.message);
       } finally {
+        setLoading(false);
         refreshBtn.disabled = busy;
         refreshBtn.textContent = "Refresh list";
       }
@@ -628,8 +873,10 @@
       clearTimeout(suggestTimer);
       clearTimeout(lookupTimer);
       suggestTimer = setTimeout(() => suggest(currentIp() || q).catch(() => {}), 250);
-      lookupTimer = setTimeout(() => loadServerCard(currentIp()).catch(() => {}), 400);
+      lookupTimer = setTimeout(() => loadServerCard(currentIp()).catch(() => {}), 500);
     });
+
+    initSession();
 
     fetch("/api/version", { cache: "no-store" })
       .then((r) => r.json())
@@ -648,7 +895,7 @@
         return loadList();
       })
       .catch((err) => {
-        document.getElementById("app-version").textContent = "v1.2.0";
+        document.getElementById("app-version").textContent = "v1.3.0";
         meta.textContent = "Could not load list.";
         showStatus("err", err.message);
       });
