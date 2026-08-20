@@ -68,56 +68,61 @@ function randomPassword() {
 
 function seedUsersFromEnv() {
   const seeds = [];
+  const defaults = [
+    { username: "jahanzaib", email: "admin@dropkick.local", role: "admin" },
+    { username: "admin2", email: "admin2@dropkick.local", role: "admin" },
+    { username: "operator1", email: "operator1@dropkick.local", role: "user" },
+    { username: "operator2", email: "operator2@dropkick.local", role: "user" },
+    { username: "operator3", email: "operator3@dropkick.local", role: "user" },
+  ];
 
-  const primary = {
-    username: process.env.ADMIN_USERNAME,
-    email: process.env.ADMIN_EMAIL,
-    password: process.env.ADMIN_PASSWORD,
-    role: "admin",
-  };
-  if (primary.username && primary.email && primary.password) seeds.push(primary);
-
-  const extras = [
+  const envRows = [
+    {
+      username: process.env.ADMIN_USERNAME,
+      email: process.env.ADMIN_EMAIL,
+      role: "admin",
+    },
     {
       username: process.env.ADMIN2_USERNAME,
       email: process.env.ADMIN2_EMAIL,
-      password: process.env.ADMIN2_PASSWORD,
       role: "admin",
     },
     {
       username: process.env.USER1_USERNAME,
       email: process.env.USER1_EMAIL,
-      password: process.env.USER1_PASSWORD,
       role: "user",
     },
     {
       username: process.env.USER2_USERNAME,
       email: process.env.USER2_EMAIL,
-      password: process.env.USER2_PASSWORD,
       role: "user",
     },
     {
       username: process.env.USER3_USERNAME,
       email: process.env.USER3_EMAIL,
-      password: process.env.USER3_PASSWORD,
       role: "user",
     },
   ];
 
-  for (const row of extras) {
-    if (row.username && row.email) {
-      seeds.push({
-        ...row,
-        password: row.password || randomPassword(),
-      });
-    }
+  const source = envRows.some((row) => row.username && row.email) ? envRows : defaults;
+
+  for (const row of source) {
+    if (!row.username || !row.email) continue;
+    seeds.push({
+      username: row.username,
+      email: row.email,
+      role: row.role,
+      password: randomPassword(),
+    });
   }
 
   if (!seeds.length) {
-    const adminUser = process.env.ADMIN_USERNAME || "admin";
-    const adminEmail = process.env.ADMIN_EMAIL || "admin@dropkick.local";
-    const adminPass = process.env.ADMIN_PASSWORD || randomPassword();
-    seeds.push({ username: adminUser, email: adminEmail, password: adminPass, role: "admin" });
+    seeds.push({
+      username: process.env.ADMIN_USERNAME || "admin",
+      email: process.env.ADMIN_EMAIL || "admin@dropkick.local",
+      role: "admin",
+      password: randomPassword(),
+    });
   }
 
   return seeds;
@@ -151,11 +156,12 @@ async function run() {
 
   if (userCount === 0) {
     const bcrypt = require("bcryptjs");
+    const bcryptRounds = Number(process.env.BCRYPT_ROUNDS) || 10;
     const seeds = seedUsersFromEnv();
     const created = [];
 
     for (const seed of seeds) {
-      const hash = await bcrypt.hash(String(seed.password), 12);
+      const hash = await bcrypt.hash(String(seed.password), bcryptRounds);
       await conn.query(
         `INSERT INTO users (username, email, password_hash, role, force_password_change)
          VALUES (?, ?, ?, ?, 0)`,
@@ -174,11 +180,11 @@ async function run() {
       });
     }
 
-    console.log("\n=== Initial users created (save these passwords) ===");
+    console.log("\n=== Initial users created (save these passwords — not stored in .env) ===");
     for (const row of created) {
       console.log(`${row.role.padEnd(5)} ${row.username}  ${row.email}  password: ${row.password}`);
     }
-    console.log("====================================================\n");
+    console.log("========================================================================\n");
   } else {
     console.log(`Users table has ${userCount} row(s) — skipping seed.`);
   }

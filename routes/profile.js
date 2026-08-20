@@ -24,16 +24,20 @@ router.put("/password", async (req, res, next) => {
       return res.status(400).json({ error: "Current and new password are required." });
     }
 
-    const row = await users.findByUsername(req.user.username);
+    const row = await users.findAuthById(req.user.id);
+    if (!row) {
+      return res.status(401).json({ error: "Authentication required." });
+    }
     const ok = await users.verifyPassword(current, row.password_hash);
     if (!ok) {
-      return res.status(401).json({ error: "Current password is incorrect." });
+      return res.status(400).json({ error: "Current password is incorrect." });
     }
 
     await users.setPassword(req.user.id, nextPass);
     await sessions.destroyAllForUser(req.user.id);
-    const token = await sessions.createSession(req.user.id, req);
+    const { token, expiresAt } = await sessions.createSession(req.user.id, req);
     res.cookie(sessions.SESSION_COOKIE, token, sessions.cookieOptions(req));
+    res.setHeader("X-Session-Expires", new Date(expiresAt).toISOString());
 
     await activityLog.append({
       userId: req.user.id,
@@ -44,7 +48,7 @@ router.put("/password", async (req, res, next) => {
       ip: clientIp(req),
     });
 
-    res.json({ ok: true, message: "Password updated." });
+    res.json({ ok: true, message: "Password updated.", user: await users.findById(req.user.id), session_expires_at: expiresAt });
   } catch (err) {
     next(err);
   }

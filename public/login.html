@@ -14,7 +14,7 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root { --font-sans: "Inter", system-ui, sans-serif; --font-mono: "JetBrains Mono", ui-monospace, monospace; }
     html[data-theme="dark"] {
@@ -38,9 +38,14 @@
       --btn-shadow: rgba(37, 99, 235, 0.22);
     }
     * { box-sizing: border-box; }
+    html, body {
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
     body {
       margin: 0; min-height: 100vh; display: flex; flex-direction: column;
-      font-family: var(--font-sans); color: var(--text);
+      color: var(--text);
       background: radial-gradient(900px 400px at 15% -5%, rgba(77,141,255,.12), transparent 55%), var(--bg);
     }
     main {
@@ -63,6 +68,7 @@
     h1 { margin: 0 0 .35rem; font-size: 1.15rem; }
     .sub { margin: 0 0 1.25rem; color: var(--muted); font-size: .88rem; line-height: 1.45; }
     label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .35rem; }
+    input, button { font-family: inherit; }
     input {
       width: 100%; border: 1px solid var(--line); background: var(--bg-elev); color: var(--text);
       border-radius: 10px; padding: .65rem .75rem; font-size: .95rem; margin-bottom: .85rem;
@@ -97,33 +103,41 @@
     }
     .err.show { display: block; }
     .top-actions { position: absolute; top: 1rem; right: 1rem; }
-    .ghost {
+    .theme-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       border: 1px solid var(--line);
-      background: linear-gradient(180deg, var(--bg-elev) 0%, var(--chip, #262b34) 100%);
+      background: var(--bg-elev);
       color: var(--muted);
       border-radius: 10px;
-      padding: 0.45rem 0.75rem;
-      font-size: 0.78rem;
-      font-weight: 500;
+      padding: 0.48rem;
       cursor: pointer;
-      transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+      transition: transform 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
     }
-    .ghost:hover:not(:disabled) {
-      transform: translateY(-1px);
+    .theme-toggle:hover {
+      color: var(--text);
       border-color: var(--accent);
+      transform: translateY(-1px);
       box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
     }
+    .theme-toggle svg { width: 1rem; height: 1rem; display: block; }
     .site-footer {
       background: var(--footer-bg); border-top: 1px solid var(--footer-border);
       text-align: center; padding: .9rem; color: var(--footer-text); font-size: .75rem;
       font-family: var(--font-mono);
+      letter-spacing: 0.02em;
     }
     .site-footer strong { color: var(--footer-strong); }
   </style>
 </head>
 <body>
   <div class="top-actions">
-    <button type="button" class="ghost" id="theme-toggle">Theme</button>
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light mode">
+      <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+      </svg>
+    </button>
   </div>
   <main>
     <div class="login-card">
@@ -146,11 +160,33 @@
   <footer class="site-footer">Dropkick · <strong id="app-version">v…</strong></footer>
   <script>
     const THEME_KEY = "dk_theme";
-    document.getElementById("theme-toggle").addEventListener("click", () => {
-      const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+    const themeToggle = document.getElementById("theme-toggle");
+    const themeIcon = document.getElementById("theme-icon");
+    const ICON_SUN =
+      '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>';
+    const ICON_MOON = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+
+    function applyTheme(theme) {
+      const next = theme === "light" ? "light" : "dark";
       document.documentElement.setAttribute("data-theme", next);
       try { localStorage.setItem(THEME_KEY, next); } catch (_) {}
-    });
+      const isLight = next === "light";
+      if (themeToggle) {
+        themeToggle.setAttribute("aria-label", isLight ? "Switch to dark mode" : "Switch to light mode");
+      }
+      if (themeIcon) themeIcon.innerHTML = isLight ? ICON_MOON : ICON_SUN;
+    }
+
+    function getTheme() {
+      return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+    }
+
+    if (themeToggle) {
+      themeToggle.addEventListener("click", () => {
+        applyTheme(getTheme() === "light" ? "dark" : "light");
+      });
+    }
+    applyTheme(getTheme());
     fetch("/api/version", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => { document.getElementById("app-version").textContent = "v" + (d.version || "?"); })
@@ -171,14 +207,18 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           cache: "no-store",
+          credentials: "same-origin",
           body: JSON.stringify({
             username: document.getElementById("username").value.trim(),
             password: document.getElementById("password").value,
           }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Login failed");
-        window.location.replace("/");
+        if (res.ok) {
+          window.location.replace("/");
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Login failed");
       } catch (err) {
         errEl.textContent = err.message;
         errEl.classList.add("show");

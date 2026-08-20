@@ -4,16 +4,23 @@ function getToken(req) {
   return req.cookies && req.cookies[sessions.SESSION_COOKIE];
 }
 
-async function attachUser(req, _res, next) {
+async function attachUser(req, res, next) {
   try {
     const token = getToken(req);
     if (!token) {
       req.user = null;
       return next();
     }
-    const resolved = await sessions.resolveSession(token);
-    req.user = resolved ? resolved.user : null;
-    req.sessionId = resolved ? resolved.sessionId : null;
+    const resolved = await sessions.resolveSession(token, { touch: true });
+    if (!resolved) {
+      req.user = null;
+      return next();
+    }
+    req.user = resolved.user;
+    req.sessionId = resolved.sessionId;
+    req.sessionExpiresAt = resolved.expiresAt;
+    res.cookie(sessions.SESSION_COOKIE, token, sessions.cookieOptions(req));
+    res.setHeader("X-Session-Expires", new Date(resolved.expiresAt).toISOString());
     next();
   } catch (err) {
     next(err);

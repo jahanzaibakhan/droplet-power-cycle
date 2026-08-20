@@ -145,12 +145,17 @@
       --btn-shadow-ok: rgba(5, 150, 105, 0.2);
     }
     * { box-sizing: border-box; }
+    html {
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
     body {
       margin: 0;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      font-family: var(--font-sans);
+      font-family: inherit;
       background:
         radial-gradient(1200px 500px at 10% -10%, var(--bg-glow) 0%, transparent 55%),
         var(--bg);
@@ -321,13 +326,23 @@
       color: var(--muted);
       margin-bottom: 0.45rem;
     }
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    select,
+    textarea {
+      font-family: inherit;
+    }
+    input#ip {
+      font-family: var(--font-mono);
+      letter-spacing: 0.02em;
+    }
     input[type="text"] {
       width: 100%;
       padding: 0.78rem 0.85rem;
       border: 1px solid var(--line);
       border-radius: 10px;
       font-size: 1rem;
-      font-family: var(--font-mono);
       background: var(--bg-elev);
       color: var(--text);
     }
@@ -404,6 +419,11 @@
       filter: brightness(1.04);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       border-color: var(--accent);
+    }
+    .ghost.active {
+      color: var(--logs-tab);
+      border-color: var(--logs-tab);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
     }
     .danger {
       background: var(--btn-danger-grad);
@@ -532,6 +552,7 @@
       line-height: 1.35;
     }
     .fact-wide { grid-column: 1 / -1; }
+    .fact-mono strong { font-family: var(--font-mono); letter-spacing: 0.02em; }
     .pill {
       display: inline-flex;
       align-items: center;
@@ -624,6 +645,8 @@
       margin-top: 0.35rem;
       font-size: 0.72rem;
       opacity: 0.88;
+      font-family: var(--font-mono);
+      letter-spacing: 0.02em;
     }
     .modal-backdrop {
       position: fixed;
@@ -636,6 +659,7 @@
       padding: 1.25rem;
       z-index: 1000;
     }
+    .modal-backdrop.confirm-modal { z-index: 1100; }
     .modal-backdrop.show { display: flex; }
     .modal {
       width: min(100%, 26rem);
@@ -676,6 +700,14 @@
       gap: 0.55rem;
       justify-content: flex-end;
     }
+    .modal-actions.split {
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-actions-right {
+      display: flex;
+      gap: 0.55rem;
+    }
     .logs-section {
       padding: 1.15rem 1.25rem 1.05rem;
     }
@@ -695,6 +727,30 @@
       padding: 0.45rem 0.75rem;
       font-size: 0.82rem;
     }
+    .logs-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.55rem;
+      margin-bottom: 0.85rem;
+    }
+    .logs-toolbar .selection-count {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-right: auto;
+    }
+    .logs-table .col-check {
+      width: 2.25rem;
+      text-align: center;
+      padding-left: 0.65rem;
+      padding-right: 0.35rem;
+    }
+    .logs-table .col-check input {
+      width: 1rem;
+      height: 1rem;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
     .logs-wrap {
       overflow-x: auto;
       border: 1px solid var(--line);
@@ -705,6 +761,8 @@
       width: 100%;
       border-collapse: collapse;
       font-size: 0.86rem;
+      font-family: var(--font-mono);
+      letter-spacing: 0.01em;
     }
     .logs-table th,
     .logs-table td {
@@ -854,8 +912,6 @@
       white-space: nowrap;
     }
     .user-chip.admin { border-color: var(--accent); color: var(--accent); }
-    .tab.admin-tab { color: var(--logs-tab); }
-    .tab.admin-tab.active { background: var(--logs-tab); color: #fff; border-color: var(--logs-tab); }
     .admin-grid { display: grid; gap: 1rem; }
     @media (min-width: 900px) {
       .admin-grid { grid-template-columns: 1fr 1fr; }
@@ -870,7 +926,21 @@
       padding: 0.55rem 0.7rem;
       font-size: 0.88rem;
     }
+    #edit-role {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 0.55rem 0.7rem;
+      font-size: 0.88rem;
+    }
     .admin-users-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .admin-users-table .col-time {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.01em;
+    }
     .admin-users-table th, .admin-users-table td {
       text-align: left;
       padding: 0.55rem 0.45rem;
@@ -949,6 +1019,7 @@
       </div>
       <div class="brand-right">
         <span class="user-chip" id="user-chip" title=""></span>
+        <button type="button" class="ghost hidden" id="admin-btn">Admin</button>
         <button type="button" class="ghost" id="profile-btn">Profile</button>
         <button type="button" class="ghost" id="logout-btn">Logout</button>
         <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light mode">
@@ -964,8 +1035,7 @@
       <button type="button" class="tab active" data-tab="digitalocean" data-provider="digitalocean">DigitalOcean</button>
       <button type="button" class="tab" data-tab="vultr" data-provider="vultr">Vultr</button>
       <button type="button" class="tab" data-tab="linode" data-provider="linode">Linode</button>
-      <button type="button" class="tab" data-tab="logs">Operation log</button>
-      <button type="button" class="tab admin-tab hidden" data-tab="admin" id="admin-tab">Admin</button>
+      <button type="button" class="tab hidden" data-tab="logs" id="logs-tab">Operation log</button>
     </div>
 
     <div id="control-view" class="view-panel">
@@ -1011,6 +1081,10 @@
         <h2 id="logs-title">Operation log</h2>
         <button type="button" class="ghost" id="logs-refresh">Refresh</button>
       </div>
+      <div class="logs-toolbar" id="logs-toolbar">
+        <span class="selection-count" id="logs-selection-count">0 selected</span>
+        <button type="button" class="danger" id="logs-delete-selected" disabled>Delete selected</button>
+      </div>
       <div class="logs-filter hidden" id="logs-filter">
         <label for="logs-user-filter">User</label>
         <select id="logs-user-filter">
@@ -1021,6 +1095,7 @@
         <table class="logs-table">
           <thead>
             <tr>
+              <th class="col-check"><input type="checkbox" id="logs-select-all" aria-label="Select all logs" /></th>
               <th>Date / time</th>
               <th>User</th>
               <th>Upstream</th>
@@ -1101,11 +1176,11 @@
 
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-relevant="additions"></div>
 
-  <div class="modal-backdrop" id="modal-backdrop" aria-hidden="true">
+  <div class="modal-backdrop confirm-modal" id="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <h3 id="modal-title">Confirm action</h3>
       <p id="modal-body"></p>
-      <label class="modal-check">
+      <label class="modal-check hidden" id="modal-skip-wrap">
         <input type="checkbox" id="modal-skip" />
         <span>Don't show this warning again for 5 hours</span>
       </label>
@@ -1144,11 +1219,49 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="user-edit-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="user-edit-title">
+      <h3 id="user-edit-title">Manage user</h3>
+      <div class="profile-field">
+        <label for="edit-username">Username</label>
+        <input id="edit-username" autocomplete="off" />
+      </div>
+      <div class="profile-field">
+        <label for="edit-email">Email</label>
+        <input id="edit-email" type="email" autocomplete="off" />
+      </div>
+      <div class="profile-field">
+        <label for="edit-role">Role</label>
+        <select id="edit-role">
+          <option value="user">Operator</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="profile-field">
+        <label for="edit-password">New password <span style="color:var(--muted);font-weight:400">(leave blank to keep)</span></label>
+        <input id="edit-password" type="password" autocomplete="new-password" />
+      </div>
+      <label class="modal-check">
+        <input type="checkbox" id="edit-active" />
+        <span>Account active</span>
+      </label>
+      <div class="status" id="user-edit-status"></div>
+      <div class="modal-actions split">
+        <button type="button" class="danger" id="user-edit-delete">Delete account</button>
+        <div class="modal-actions-right">
+          <button type="button" class="ghost" id="user-edit-cancel">Cancel</button>
+          <button type="button" class="primary" id="user-edit-save">Save changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
-    const SESSION_MS = 5 * 60 * 60 * 1000;
-    const SESSION_KEY = "cpc_session_started";
+    const CONFIRM_SKIP_MS = 5 * 60 * 60 * 1000;
+    const CONFIRM_WINDOW_KEY = "cpc_confirm_window_started";
     const SKIP_CONFIRM_KEY = "cpc_skip_confirm";
     const THEME_KEY = "dk_theme";
+    let loginSessionExpiresAt = 0;
 
     const themeToggle = document.getElementById("theme-toggle");
     const themeLabel = document.getElementById("theme-label");
@@ -1258,6 +1371,7 @@
     const modalTitle = document.getElementById("modal-title");
     const modalBody = document.getElementById("modal-body");
     const modalSkip = document.getElementById("modal-skip");
+    const modalSkipWrap = document.getElementById("modal-skip-wrap");
     const modalCancel = document.getElementById("modal-cancel");
     const modalConfirm = document.getElementById("modal-confirm");
     const sessionNote = document.getElementById("session-note");
@@ -1273,8 +1387,13 @@
     const tabBtns = Array.from(document.querySelectorAll(".tab[data-tab]"));
     const logsUserFilter = document.getElementById("logs-user-filter");
     const logsFilterWrap = document.getElementById("logs-filter");
+    const logsSelectAll = document.getElementById("logs-select-all");
+    const logsDeleteBtn = document.getElementById("logs-delete-selected");
+    const logsSelectionCount = document.getElementById("logs-selection-count");
 
     let currentUser = null;
+    let selectedLogIds = new Set();
+    let loadedLogs = [];
 
     const ACTION_COPY = {
       power_cycle: { verb: "power cycle", doing: "Power cycling", done: "Power cycle completed", title: "Power cycle server?" },
@@ -1320,21 +1439,36 @@
       chip.textContent = currentUser.username;
       chip.title = currentUser.email + " · " + currentUser.role;
       chip.classList.toggle("admin", currentUser.role === "admin");
-      const adminTabEl = document.getElementById("admin-tab");
+      const adminBtn = document.getElementById("admin-btn");
+      const logsTab = document.getElementById("logs-tab");
       if (currentUser.role === "admin") {
-        adminTabEl.classList.remove("hidden");
+        adminBtn.classList.remove("hidden");
+        logsTab.classList.remove("hidden");
         logsFilterWrap.classList.remove("hidden");
       } else {
-        adminTabEl.classList.add("hidden");
+        adminBtn.classList.add("hidden");
+        logsTab.classList.add("hidden");
         logsFilterWrap.classList.add("hidden");
+        if (activeTab === "logs") {
+          showControlView(provider);
+        }
       }
     }
 
     async function authFetch(url, options) {
-      const res = await fetch(url, options || { cache: "no-store" });
+      const res = await fetch(url, { cache: "no-store", ...(options || {}) });
+      const sessionHeader = res.headers.get("X-Session-Expires");
+      if (sessionHeader) setLoginSessionExpiry(sessionHeader);
       if (res.status === 401) {
-        window.location.replace("/");
-        throw new Error("Session expired");
+        let msg = "";
+        try {
+          const data = await res.clone().json();
+          msg = data.error || "";
+        } catch (_) {}
+        if (msg === "Authentication required.") {
+          window.location.replace("/");
+          throw new Error("Session expired");
+        }
       }
       return res;
     }
@@ -1360,36 +1494,62 @@
       return "digitalocean";
     }
 
-    function initSession() {
+    function setLoginSessionExpiry(value) {
+      if (!value) return;
+      const ms = new Date(value).getTime();
+      if (!Number.isNaN(ms)) loginSessionExpiresAt = ms;
+    }
+
+    function formatDuration(ms) {
+      const total = Math.max(0, ms);
+      const hrs = Math.floor(total / 3600000);
+      const mins = Math.floor((total % 3600000) / 60000);
+      if (hrs > 0) return hrs + "h " + mins + "m";
+      return mins + "m";
+    }
+
+    function initConfirmWindow() {
       const now = Date.now();
-      const started = Number(sessionStorage.getItem(SESSION_KEY) || 0);
-      if (!started || now - started >= SESSION_MS) {
-        sessionStorage.setItem(SESSION_KEY, String(now));
+      const started = Number(sessionStorage.getItem(CONFIRM_WINDOW_KEY) || 0);
+      if (!started || now - started >= CONFIRM_SKIP_MS) {
+        sessionStorage.setItem(CONFIRM_WINDOW_KEY, String(now));
         sessionStorage.removeItem(SKIP_CONFIRM_KEY);
-        updateSessionNote(true);
         return true;
       }
-      updateSessionNote(false);
       return false;
     }
 
     function shouldSkipConfirm() {
-      initSession();
+      initConfirmWindow();
       return sessionStorage.getItem(SKIP_CONFIRM_KEY) === "1";
     }
 
-    function updateSessionNote(refreshed) {
-      const started = Number(sessionStorage.getItem(SESSION_KEY) || Date.now());
-      const left = Math.max(0, SESSION_MS - (Date.now() - started));
-      const hrs = Math.floor(left / 3600000);
-      const mins = Math.floor((left % 3600000) / 60000);
-      let line = "Session expires in " + hrs + "h " + mins + "m";
-      if (sessionStorage.getItem(SKIP_CONFIRM_KEY) === "1") line += " · confirmations skipped";
-      if (refreshed) line += " · session refreshed";
-      sessionNote.textContent = line;
+    function updateSessionNote() {
+      const parts = [];
+      if (loginSessionExpiresAt) {
+        const left = loginSessionExpiresAt - Date.now();
+        if (left <= 0) {
+          parts.push("Login session expired");
+        } else {
+          parts.push("Login idle timeout in " + formatDuration(left));
+        }
+      }
+      if (sessionStorage.getItem(SKIP_CONFIRM_KEY) === "1") {
+        const started = Number(sessionStorage.getItem(CONFIRM_WINDOW_KEY) || Date.now());
+        const skipLeft = CONFIRM_SKIP_MS - (Date.now() - started);
+        if (skipLeft > 0) {
+          parts.push("Confirmations skipped · " + formatDuration(skipLeft) + " left");
+        } else {
+          sessionStorage.removeItem(SKIP_CONFIRM_KEY);
+        }
+      }
+      sessionNote.textContent = parts.join(" · ");
+      if (loginSessionExpiresAt && loginSessionExpiresAt <= Date.now()) {
+        window.location.replace("/");
+      }
     }
 
-    setInterval(updateSessionNote, 60000);
+    setInterval(updateSessionNote, 30000);
 
     function setLoadingMessage(message) {
       loadingText.textContent = message || "Loading…";
@@ -1580,9 +1740,21 @@
       });
     }
 
+    function parseAppInstant(value) {
+      if (value == null || value === "") return null;
+      if (value instanceof Date) return value;
+      const s = String(value).trim();
+      if (!s) return null;
+      if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(s) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
+        return new Date(s.replace(" ", "T") + "Z");
+      }
+      const d = new Date(s);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
     function formatLogTime(iso) {
-      const d = new Date(iso);
-      if (Number.isNaN(d.getTime())) return "—";
+      const d = parseAppInstant(iso);
+      if (!d) return "—";
       return d.toLocaleString(undefined, {
         year: "numeric",
         month: "short",
@@ -1610,20 +1782,45 @@
       return '<span class="provider-tag ' + cls + '">' + esc(name || "—") + "</span>";
     }
 
+    function updateLogsSelectionUi() {
+      const count = selectedLogIds.size;
+      if (logsSelectionCount) {
+        logsSelectionCount.textContent = count === 1 ? "1 selected" : count + " selected";
+      }
+      if (logsDeleteBtn) logsDeleteBtn.disabled = count === 0;
+      if (logsSelectAll) {
+        const visible = loadedLogs.length;
+        logsSelectAll.checked = visible > 0 && count === visible;
+        logsSelectAll.indeterminate = count > 0 && count < visible;
+      }
+    }
+
+    function clearLogSelection() {
+      selectedLogIds = new Set();
+      updateLogsSelectionUi();
+    }
+
     function renderLogs(logs) {
-      if (!logs || !logs.length) {
+      loadedLogs = logs || [];
+      clearLogSelection();
+      if (!loadedLogs.length) {
         logsWrap.classList.add("hidden");
         logsEmpty.classList.remove("hidden");
         logsBody.innerHTML = "";
+        if (logsSelectAll) {
+          logsSelectAll.checked = false;
+          logsSelectAll.indeterminate = false;
+        }
         return;
       }
       logsEmpty.classList.add("hidden");
       logsWrap.classList.remove("hidden");
-      logsBody.innerHTML = logs.map((row) => {
+      logsBody.innerHTML = loadedLogs.map((row) => {
         const upstream = esc(row.upstream || "—");
         const ipLine = row.ip ? '<small>' + esc(row.ip) + "</small>" : "";
         return (
           "<tr>" +
+            '<td class="col-check"><input type="checkbox" class="log-select" data-log-id="' + esc(row.id) + '" aria-label="Select log" /></td>' +
             '<td class="col-time">' + esc(formatLogTime(row.at)) + "</td>" +
             '<td class="col-user">' + esc(row.username || "—") + "</td>" +
             '<td class="col-upstream">' + upstream + ipLine + "</td>" +
@@ -1634,10 +1831,42 @@
       }).join("");
     }
 
+    async function deleteSelectedLogs() {
+      if (!selectedLogIds.size) return;
+      const count = selectedLogIds.size;
+      const ok = await confirmAction({
+        title: "Delete log records?",
+        html:
+          "Delete <strong>" + count + "</strong> selected log record" + (count === 1 ? "" : "s") +
+          "?<br /><br />This cannot be undone.",
+        confirmLabel: "Delete",
+        danger: true,
+      });
+      if (!ok) return;
+      logsDeleteBtn.disabled = true;
+      try {
+        const res = await authFetch("/api/admin/logs", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: Array.from(selectedLogIds) }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Delete failed");
+        await loadLogs();
+      } catch (err) {
+        if (err.message === "Session expired") return;
+        logsEmpty.classList.remove("hidden");
+        logsEmpty.textContent = err.message;
+      } finally {
+        updateLogsSelectionUi();
+      }
+    }
+
     async function loadLogs() {
+      if (!currentUser || currentUser.role !== "admin") return;
       try {
         let url = "/api/logs?limit=100";
-        if (currentUser && currentUser.role === "admin" && logsUserFilter && logsUserFilter.value) {
+        if (logsUserFilter && logsUserFilter.value) {
           url += "&user_id=" + encodeURIComponent(logsUserFilter.value);
         }
         const res = await authFetch(url);
@@ -1664,12 +1893,16 @@
       } catch (_) {}
     }
 
+    let editingUserId = null;
+    let adminUsersCache = [];
+
     async function loadAdminUsers() {
       const body = document.getElementById("admin-users-body");
       const res = await authFetch("/api/admin/users");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load users");
-      body.innerHTML = (data.users || []).map((u) => {
+      adminUsersCache = data.users || [];
+      body.innerHTML = adminUsersCache.map((u) => {
         const roleCls = u.role === "admin" ? "admin" : "user";
         const stateCls = u.active ? "on" : "off";
         return (
@@ -1680,15 +1913,39 @@
             '<td><span class="state-pill ' + stateCls + '">' + (u.active ? "active" : "disabled") + "</span></td>" +
             '<td class="col-time">' + esc(formatLogTime(u.last_login_at)) + "</td>" +
             '<td><div class="mini-actions">' +
-              '<button type="button" data-user-edit="' + u.id + '">Edit</button>' +
-              '<button type="button" data-user-pass="' + u.id + '">Password</button>' +
-              '<button type="button" data-user-toggle="' + u.id + '" data-active="' + (u.active ? "1" : "0") + '">' +
-                (u.active ? "Disable" : "Enable") +
-              "</button>" +
+              '<button type="button" data-user-manage="' + u.id + '">Manage</button>' +
             "</div></td>" +
           "</tr>"
         );
       }).join("");
+    }
+
+    function openUserEditModal(userId) {
+      const user = adminUsersCache.find((u) => String(u.id) === String(userId));
+      if (!user) return;
+      editingUserId = user.id;
+      document.getElementById("user-edit-title").textContent = "Manage · " + user.username;
+      document.getElementById("edit-username").value = user.username;
+      document.getElementById("edit-email").value = user.email;
+      document.getElementById("edit-role").value = user.role;
+      document.getElementById("edit-active").checked = Boolean(user.active);
+      document.getElementById("edit-password").value = "";
+      document.getElementById("user-edit-status").className = "status";
+      document.getElementById("user-edit-status").textContent = "";
+      const deleteBtn = document.getElementById("user-edit-delete");
+      const isSelf = currentUser && String(currentUser.id) === String(user.id);
+      deleteBtn.disabled = isSelf;
+      deleteBtn.title = isSelf ? "You cannot delete your own account" : "Permanently delete this account";
+      document.getElementById("user-edit-backdrop").classList.add("show");
+      document.getElementById("user-edit-backdrop").setAttribute("aria-hidden", "false");
+      document.body.classList.add("modal-open");
+    }
+
+    function closeUserEditModal() {
+      editingUserId = null;
+      document.getElementById("user-edit-backdrop").classList.remove("show");
+      document.getElementById("user-edit-backdrop").setAttribute("aria-hidden", "true");
+      document.body.classList.remove("modal-open");
     }
 
     async function loadActivity() {
@@ -1722,14 +1979,51 @@
       return data.user;
     }
 
+    async function adminDeleteUser(id) {
+      const res = await authFetch("/api/admin/users/" + id, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Delete failed");
+    }
+
     logsRefreshBtn.addEventListener("click", () => loadLogs());
     if (logsUserFilter) logsUserFilter.addEventListener("change", () => loadLogs());
+
+    if (logsSelectAll) {
+      logsSelectAll.addEventListener("change", () => {
+        if (logsSelectAll.checked) {
+          selectedLogIds = new Set(loadedLogs.map((row) => row.id));
+        } else {
+          selectedLogIds = new Set();
+        }
+        logsBody.querySelectorAll(".log-select").forEach((cb) => {
+          cb.checked = logsSelectAll.checked;
+        });
+        updateLogsSelectionUi();
+      });
+    }
+
+    logsBody.addEventListener("change", (e) => {
+      const cb = e.target.closest(".log-select");
+      if (!cb || !cb.dataset.logId) return;
+      if (cb.checked) selectedLogIds.add(cb.dataset.logId);
+      else selectedLogIds.delete(cb.dataset.logId);
+      updateLogsSelectionUi();
+    });
+
+    if (logsDeleteBtn) {
+      logsDeleteBtn.addEventListener("click", () => deleteSelectedLogs().catch(() => {}));
+    }
 
     document.getElementById("logout-btn").addEventListener("click", async () => {
       try {
         await authFetch("/api/auth/logout", { method: "POST" });
       } catch (_) {}
       window.location.replace("/");
+    });
+
+    document.getElementById("admin-btn").addEventListener("click", () => {
+      if (activeTab === "admin") return;
+      showAdminView();
     });
 
     document.getElementById("profile-btn").addEventListener("click", () => {
@@ -1760,15 +2054,20 @@
         const current = document.getElementById("profile-current").value;
         const nextPass = document.getElementById("profile-new").value;
 
-        const res = await authFetch("/api/profile", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, email }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Profile update failed");
-        currentUser = data.user;
-        applyUserUi();
+        const profileChanged =
+          username !== currentUser.username || email !== currentUser.email;
+
+        if (profileChanged) {
+          const res = await authFetch("/api/profile", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, email }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Profile update failed");
+          currentUser = data.user;
+          applyUserUi();
+        }
 
         if (current && nextPass) {
           const pwRes = await authFetch("/api/profile/password", {
@@ -1778,6 +2077,14 @@
           });
           const pwData = await pwRes.json();
           if (!pwRes.ok) throw new Error(pwData.error || "Password update failed");
+          if (pwData.user) {
+            currentUser = pwData.user;
+            applyUserUi();
+          }
+          document.getElementById("profile-current").value = "";
+          document.getElementById("profile-new").value = "";
+        } else if (!profileChanged) {
+          throw new Error("Change username, email, or enter a new password.");
         }
 
         statusEl.className = "status show ok";
@@ -1823,40 +2130,74 @@
     document.getElementById("users-refresh").addEventListener("click", () => loadAdminUsers().catch(() => {}));
     document.getElementById("activity-refresh").addEventListener("click", () => loadActivity().catch(() => {}));
 
-    document.getElementById("admin-users-body").addEventListener("click", async (e) => {
-      const btn = e.target.closest("button");
-      if (!btn) return;
+    document.getElementById("user-edit-cancel").addEventListener("click", closeUserEditModal);
+
+    document.getElementById("user-edit-delete").addEventListener("click", async () => {
+      if (!editingUserId) return;
+      const user = adminUsersCache.find((u) => String(u.id) === String(editingUserId));
+      if (!user) return;
+      if (currentUser && String(currentUser.id) === String(editingUserId)) return;
+      const label = user.username;
+      const ok = await confirmAction({
+        title: "Delete account?",
+        html:
+          "Delete account <strong>" + esc(label) + "</strong>?<br /><br />This cannot be undone.",
+        confirmLabel: "Delete account",
+        danger: true,
+      });
+      if (!ok) return;
+      const statusEl = document.getElementById("user-edit-status");
+      const deleteBtn = document.getElementById("user-edit-delete");
+      statusEl.className = "status";
+      deleteBtn.disabled = true;
       try {
-        if (btn.dataset.userEdit) {
-          const id = btn.dataset.userEdit;
-          const username = prompt("New username:");
-          if (username == null) return;
-          const email = prompt("New email:");
-          if (email == null) return;
-          await adminUpdateUser(id, { username: username.trim(), email: email.trim() });
-        } else if (btn.dataset.userPass) {
-          const id = btn.dataset.userPass;
-          const password = prompt("New password (min 8 characters):");
-          if (!password) return;
-          const res = await authFetch("/api/admin/users/" + id + "/password", {
+        await adminDeleteUser(editingUserId);
+        closeUserEditModal();
+        await loadAdminUsers();
+        populateLogsUserFilter().catch(() => {});
+      } catch (err) {
+        statusEl.className = "status show err";
+        statusEl.textContent = err.message;
+        deleteBtn.disabled = false;
+      }
+    });
+
+    document.getElementById("user-edit-save").addEventListener("click", async () => {
+      if (!editingUserId) return;
+      const statusEl = document.getElementById("user-edit-status");
+      statusEl.className = "status";
+      try {
+        await adminUpdateUser(editingUserId, {
+          username: document.getElementById("edit-username").value.trim(),
+          email: document.getElementById("edit-email").value.trim(),
+          role: document.getElementById("edit-role").value,
+          active: document.getElementById("edit-active").checked,
+        });
+        const newPass = document.getElementById("edit-password").value;
+        if (newPass) {
+          const res = await authFetch("/api/admin/users/" + editingUserId + "/password", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ password, force_password_change: true }),
+            body: JSON.stringify({ password: newPass, force_password_change: true }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Password reset failed");
-          alert("Password updated.");
-        } else if (btn.dataset.userToggle) {
-          const id = btn.dataset.userToggle;
-          const active = btn.dataset.active !== "1";
-          if (!confirm(active ? "Enable this user?" : "Disable this user?")) return;
-          await adminUpdateUser(id, { active });
         }
-        loadAdminUsers().catch(() => {});
+        statusEl.className = "status show ok";
+        statusEl.textContent = "User updated.";
+        await loadAdminUsers();
         populateLogsUserFilter().catch(() => {});
+        setTimeout(closeUserEditModal, 600);
       } catch (err) {
-        alert(err.message);
+        statusEl.className = "status show err";
+        statusEl.textContent = err.message;
       }
+    });
+
+    document.getElementById("admin-users-body").addEventListener("click", async (e) => {
+      const btn = e.target.closest("button");
+      if (!btn || !btn.dataset.userManage) return;
+      openUserEditModal(btn.dataset.userManage);
     });
 
     function esc(text) {
@@ -1957,15 +2298,15 @@
           fact("Plan", d.size || "—") +
           (isInstanceProvider() && d.server_status ? fact("Server health", d.server_status) : "") +
           (isInstanceProvider() && d.status && d.power_status ? fact("Instance status", d.status) : "") +
-          fact("Instance ID", d.id, false, true) +
+          fact("Instance ID", d.id, false, true, true) +
         "</div>";
 
       facts.innerHTML = html;
     }
 
-    function fact(label, value, html, wide) {
+    function fact(label, value, html, wide, mono) {
       return (
-        '<div class="fact' + (wide ? " fact-wide" : "") + '"><span>' + esc(label) + "</span><strong>" +
+        '<div class="fact' + (wide ? " fact-wide" : "") + (mono ? " fact-mono" : "") + '"><span>' + esc(label) + "</span><strong>" +
         (html ? value : esc(value == null ? "—" : value)) +
         "</strong></div>"
       );
@@ -1995,9 +2336,12 @@
       tabBtns.forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.tab === activeTab);
       });
+      const adminBtn = document.getElementById("admin-btn");
+      if (adminBtn) adminBtn.classList.toggle("active", activeTab === "admin");
     }
 
     function showLogsView() {
+      if (!currentUser || currentUser.role !== "admin") return;
       activeTab = "logs";
       hideAllViews();
       logsView.classList.remove("hidden");
@@ -2028,15 +2372,17 @@
     }
 
     function confirmAction(opts) {
-      if (shouldSkipConfirm()) return Promise.resolve(true);
+      if (opts && opts.showSkip && shouldSkipConfirm()) return Promise.resolve(true);
 
       return new Promise((resolve) => {
         modalResolve = resolve;
-        modalTitle.textContent = opts.title || "Confirm action";
-        modalBody.innerHTML = opts.html || "";
+        modalTitle.textContent = (opts && opts.title) || "Confirm action";
+        modalBody.innerHTML = (opts && opts.html) || "";
         modalSkip.checked = false;
-        modalConfirm.textContent = opts.confirmLabel || "Confirm";
-        modalConfirm.className = "primary" + (opts.danger ? " danger" : providerBtnClass());
+        const showSkip = Boolean(opts && opts.showSkip);
+        if (modalSkipWrap) modalSkipWrap.classList.toggle("hidden", !showSkip);
+        modalConfirm.textContent = (opts && opts.confirmLabel) || "Confirm";
+        modalConfirm.className = "primary" + (opts && opts.danger ? " danger" : providerBtnClass());
         modalBackdrop.classList.add("show");
         modalBackdrop.setAttribute("aria-hidden", "false");
         document.body.classList.add("modal-open");
@@ -2045,9 +2391,10 @@
     }
 
     function closeModal(result) {
-      if (modalSkip.checked && result) {
+      if (modalSkipWrap && !modalSkipWrap.classList.contains("hidden") && modalSkip.checked && result) {
+        sessionStorage.setItem(CONFIRM_WINDOW_KEY, String(Date.now()));
         sessionStorage.setItem(SKIP_CONFIRM_KEY, "1");
-        updateSessionNote(false);
+        updateSessionNote();
       }
       modalBackdrop.classList.remove("show");
       modalBackdrop.setAttribute("aria-hidden", "true");
@@ -2066,6 +2413,10 @@
     document.addEventListener("keydown", (e) => {
       if (!modalBackdrop.classList.contains("show")) return;
       if (e.key === "Escape") closeModal(false);
+      if (e.key === "Enter") {
+        e.preventDefault();
+        closeModal(true);
+      }
     });
 
     async function fetchJson(url, retries) {
@@ -2075,8 +2426,15 @@
         try {
           const res = await fetch(url, { cache: "no-store" });
           if (res.status === 401) {
-            window.location.replace("/");
-            throw new Error("Session expired");
+            let msg = "";
+            try {
+              const body = await res.clone().json();
+              msg = body && body.error ? String(body.error) : "";
+            } catch (_) {}
+            if (msg === "Authentication required.") {
+              window.location.replace("/");
+              throw new Error("Session expired");
+            }
           }
           const data = await res.json();
           return { res, data };
@@ -2281,6 +2639,7 @@
           "Provider: " + c.label,
         confirmLabel: copy.title.replace("?", ""),
         danger: kind === "stop" || kind === "power_cycle",
+        showSkip: true,
       });
       if (!ok) return;
 
@@ -2352,6 +2711,7 @@
 
     function switchTab(tab) {
       if (tab === "logs") {
+        if (!currentUser || currentUser.role !== "admin") return;
         showLogsView();
         return;
       }
@@ -2405,7 +2765,7 @@
       }, 500);
     });
 
-    initSession();
+    initConfirmWindow();
 
     async function initApp() {
       try {
@@ -2416,9 +2776,12 @@
           }
           return;
         }
+        setLoginSessionExpiry(meRes.headers.get("X-Session-Expires"));
         const meData = await meRes.json();
         currentUser = meData.user;
+        setLoginSessionExpiry(meData.session_expires_at);
         applyUserUi();
+        updateSessionNote();
 
         const verRes = await fetch("/api/version", { cache: "no-store" });
         const d = await verRes.json();

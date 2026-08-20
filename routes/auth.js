@@ -18,41 +18,48 @@ router.post("/login", async (req, res, next) => {
     const ip = clientIp(req);
 
     if (!row || !row.active) {
-      await activityLog.append({
-        username,
-        category: "auth",
-        action: "login_failed",
-        detail: "Invalid credentials or inactive account",
-        ip,
-      });
+      activityLog
+        .append({
+          username,
+          category: "auth",
+          action: "login_failed",
+          detail: "Invalid credentials or inactive account",
+          ip,
+        })
+        .catch(() => {});
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
     const ok = await users.verifyPassword(password, row.password_hash);
     if (!ok) {
-      await activityLog.append({
-        userId: row.id,
-        username: row.username,
-        category: "auth",
-        action: "login_failed",
-        detail: "Wrong password",
-        ip,
-      });
+      activityLog
+        .append({
+          userId: row.id,
+          username: row.username,
+          category: "auth",
+          action: "login_failed",
+          detail: "Wrong password",
+          ip,
+        })
+        .catch(() => {});
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
-    const token = await sessions.createSession(row.id, req);
+    const { token, expiresAt } = await sessions.createSession(row.id, req);
     await users.recordLogin(row.id);
-    await activityLog.append({
-      userId: row.id,
-      username: row.username,
-      category: "auth",
-      action: "login",
-      ip,
-    });
+    activityLog
+      .append({
+        userId: row.id,
+        username: row.username,
+        category: "auth",
+        action: "login",
+        ip,
+      })
+      .catch(() => {});
 
     res.cookie(sessions.SESSION_COOKIE, token, sessions.cookieOptions(req));
-    res.json({ user: users.sanitize(row) });
+    res.setHeader("X-Session-Expires", new Date(expiresAt).toISOString());
+    res.json({ user: users.sanitize(row), session_expires_at: expiresAt });
   } catch (err) {
     next(err);
   }
@@ -69,7 +76,7 @@ router.post("/logout", requireAuth, async (req, res, next) => {
       action: "logout",
       ip: clientIp(req),
     });
-    res.clearCookie(sessions.SESSION_COOKIE, { path: "/" });
+    res.clearCookie(sessions.SESSION_COOKIE, { ...sessions.cookieOptions(req), maxAge: 0 });
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -77,7 +84,10 @@ router.post("/logout", requireAuth, async (req, res, next) => {
 });
 
 router.get("/me", requireAuth, (req, res) => {
-  res.json({ user: req.user });
+  res.json({
+    user: req.user,
+    session_expires_at: req.sessionExpiresAt || null,
+  });
 });
 
 module.exports = router;

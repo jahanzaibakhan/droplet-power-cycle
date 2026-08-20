@@ -2,6 +2,7 @@ const express = require("express");
 const users = require("../lib/users");
 const sessions = require("../lib/sessions");
 const activityLog = require("../lib/activityLog");
+const operationLogs = require("../lib/operationLogs");
 const { requireAdmin, clientIp } = require("../middleware/auth");
 
 const router = express.Router();
@@ -94,6 +95,29 @@ router.put("/users/:id", async (req, res, next) => {
   }
 });
 
+router.delete("/users/:id", async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const target = await users.findById(id);
+    if (!target) return res.status(404).json({ error: "User not found." });
+
+    await users.deleteUser(id, { actorId: req.user.id });
+
+    activityLog.append({
+      userId: req.user.id,
+      username: req.user.username,
+      category: "admin",
+      action: "user_deleted",
+      detail: `Deleted ${target.username} (${target.role})`,
+      ip: clientIp(req),
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.put("/users/:id/password", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
@@ -127,6 +151,32 @@ router.get("/activity", async (req, res, next) => {
     const category = req.query.category ? String(req.query.category) : undefined;
     const logs = await activityLog.list({ limit, userId, category });
     res.json({ logs });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/logs", async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
+    if (!ids.length) {
+      return res.status(400).json({ error: "Select at least one log to delete." });
+    }
+    const removed = await operationLogs.deleteLogs(ids);
+    if (!removed) {
+      return res.status(404).json({ error: "No matching log records found." });
+    }
+
+    await activityLog.append({
+      userId: req.user.id,
+      username: req.user.username,
+      category: "admin",
+      action: "logs_deleted",
+      detail: `Removed ${removed} operation log(s)`,
+      ip: clientIp(req),
+    });
+
+    res.json({ ok: true, removed });
   } catch (err) {
     next(err);
   }

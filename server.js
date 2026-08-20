@@ -9,7 +9,7 @@ const { createVultrProvider } = require("./providers/vultr");
 const { createLinodeProvider } = require("./providers/linode");
 const operationLogs = require("./lib/operationLogs");
 const db = require("./lib/db");
-const { attachUser, requireAuth } = require("./middleware/auth");
+const { attachUser, requireAuth, requireAdmin } = require("./middleware/auth");
 const authRoutes = require("./routes/auth");
 const adminRoutes = require("./routes/admin");
 const profileRoutes = require("./routes/profile");
@@ -564,15 +564,10 @@ async function runDropletAction(req, res, next, requested) {
   }
 }
 
-app.get("/api/logs", async (req, res, next) => {
+app.get("/api/logs", requireAdmin, async (req, res, next) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 100, 500);
-    let userId;
-    if (req.user.role === "admin" && req.query.user_id) {
-      userId = Number(req.query.user_id);
-    } else if (req.user.role !== "admin") {
-      userId = req.user.id;
-    }
+    const userId = req.query.user_id ? Number(req.query.user_id) : undefined;
     const logs = await operationLogs.listLogs(limit, { userId: userId || undefined });
     res.json({ logs });
   } catch (err) {
