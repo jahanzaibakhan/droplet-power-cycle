@@ -1272,12 +1272,27 @@
       if (e.key === "Escape") closeModal(false);
     });
 
+    async function fetchJson(url, retries) {
+      let lastErr;
+      const attempts = retries != null ? retries : 2;
+      for (let i = 0; i < attempts; i += 1) {
+        try {
+          const res = await fetch(url, { cache: "no-store" });
+          const data = await res.json();
+          return { res, data };
+        } catch (err) {
+          lastErr = err;
+          if (i < attempts - 1) await new Promise((r) => setTimeout(r, 800));
+        }
+      }
+      throw lastErr || new Error("Network request failed");
+    }
+
     async function loadList() {
       const c = cfg();
       setLoading(true, "Loading " + c.label + " server list…");
       try {
-        const res = await fetch(c.listPath(), { cache: "no-store" });
-        const data = await res.json();
+        const { res, data } = await fetchJson(c.listPath());
         if (!res.ok) throw new Error(data.error || "Failed to load list");
         servers = c.parseList(data);
         renderDatalist();
@@ -1290,6 +1305,17 @@
         if (!data.lastRefreshAt && count > 0) line += " · partial index (lookup by IP still works)";
         if (data.lastRefreshError) line += " · last error: " + data.lastRefreshError;
         meta.textContent = line;
+        if (!busy) hideStatus();
+      } catch (err) {
+        meta.textContent = "Could not load list.";
+        const msg = String(err.message || "Network error");
+        showStatus(
+          "err",
+          msg === "Failed to fetch"
+            ? "Could not reach the server. Wait a moment and switch tabs again, or hard-refresh the page."
+            : msg
+        );
+        throw err;
       } finally {
         setLoading(false);
       }
@@ -1318,7 +1344,11 @@
         const data = await res.json();
         if (!res.ok) {
           renderServer(null);
-          showStatus("err", data.error || "Server not found on " + c.label + ".");
+          let msg = data.error || "Server not found on " + c.label + ".";
+          if (res.status === 404 && /not found/i.test(msg)) {
+            msg += "\nTip: this IP may belong to another provider tab (DigitalOcean / Vultr / Linode).";
+          }
+          showStatus("err", msg);
           return;
         }
         renderServer(c.parseInstance(data));
@@ -1548,7 +1578,7 @@
         return loadList();
       })
       .catch((err) => {
-        document.getElementById("app-version").textContent = "v1.6.2";
+        document.getElementById("app-version").textContent = "v1.6.3";
         meta.textContent = "Could not load list.";
         showStatus("err", err.message);
       });
