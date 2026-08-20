@@ -2,16 +2,31 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <script>
+    (function () {
+      var t = localStorage.getItem("dk_theme");
+      if (t !== "light" && t !== "dark") {
+        t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      }
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dropkick — Cloud server control</title>
   <meta name="description" content="Dropkick — power cycle, stop, and start cloud servers by public IPv4 on DigitalOcean, Vultr, and Linode." />
   <meta name="application-name" content="Dropkick" />
-  <meta name="theme-color" content="#0b0c0e" />
+  <meta name="theme-color" content="#0b0c0e" id="theme-color-meta" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    :root {
+    :root,
+    [data-theme="dark"] {
       color-scheme: dark;
+      --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
       --bg: #0b0c0e;
       --bg-elev: #14161a;
       --card: #1a1d23;
@@ -19,6 +34,7 @@
       --muted: #9aa3af;
       --line: #2a2f38;
       --chip: #2b3038;
+      --chip-text: #d5dbe7;
       --accent: #4d8dff;
       --accent-hover: #6aa0ff;
       --vultr: #51b9ff;
@@ -31,24 +47,123 @@
       --danger-bg: #3a1518;
       --info: #9ec1ff;
       --info-bg: #152238;
+      --info-border: #243a5c;
+      --bg-glow: #182033;
+      --brand-gradient: linear-gradient(135deg, #f0f3f8 0%, #9ec1ff 55%, #51b9ff 100%);
+      --tab-active-text: #071018;
+      --primary-on: #071018;
+      --primary-linode-on: #041810;
+      --ghost-bg: #262b34;
+      --btn-danger: #8f2d32;
+      --btn-danger-text: #ffe9ea;
+      --btn-danger-solid: #c03943;
+      --btn-ok: #1d6b45;
+      --btn-ok-text: #ddffe9;
+      --pill-stopped-bg: #2a2e36;
+      --pill-stopped-text: #b7bec9;
+      --focus-ring: #3159a8;
+      --footer-strong: #c5ceda;
+      --modal-backdrop: rgba(5, 8, 14, 0.72);
+      --modal-shadow: rgba(0, 0, 0, 0.45);
+      --table-head-bg: rgba(0, 0, 0, 0.15);
+      --table-row-hover: rgba(255, 255, 255, 0.02);
+      --log-time: #c5ceda;
+      --op-power-bg: #1a2840;
+      --op-power-text: #9ec1ff;
+      --spinner-track: rgba(158, 193, 255, 0.25);
+      --logs-tab: #8b93ff;
+    }
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg: #f3f5f8;
+      --bg-elev: #ffffff;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --chip: #f1f5f9;
+      --chip-text: #334155;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --vultr: #0284c7;
+      --linode: #059669;
+      --ok: #059669;
+      --ok-bg: #ecfdf5;
+      --warn: #b45309;
+      --warn-bg: #fffbeb;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --info: #1d4ed8;
+      --info-bg: #eff6ff;
+      --info-border: #bfdbfe;
+      --bg-glow: #dbeafe;
+      --brand-gradient: linear-gradient(135deg, #0f172a 0%, #2563eb 50%, #0891b2 100%);
+      --tab-active-text: #ffffff;
+      --primary-on: #ffffff;
+      --primary-linode-on: #ffffff;
+      --ghost-bg: #f1f5f9;
+      --btn-danger: #dc2626;
+      --btn-danger-text: #ffffff;
+      --btn-danger-solid: #dc2626;
+      --btn-ok: #059669;
+      --btn-ok-text: #ffffff;
+      --pill-stopped-bg: #f1f5f9;
+      --pill-stopped-text: #64748b;
+      --focus-ring: #93c5fd;
+      --footer-strong: #475569;
+      --modal-backdrop: rgba(15, 23, 42, 0.35);
+      --modal-shadow: rgba(15, 23, 42, 0.12);
+      --table-head-bg: rgba(15, 23, 42, 0.04);
+      --table-row-hover: rgba(15, 23, 42, 0.03);
+      --log-time: #475569;
+      --op-power-bg: #eff6ff;
+      --op-power-text: #1d4ed8;
+      --spinner-track: rgba(37, 99, 235, 0.2);
+      --logs-tab: #6366f1;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+      font-family: var(--font-sans);
       background:
-        radial-gradient(1200px 500px at 10% -10%, #182033 0%, transparent 55%),
+        radial-gradient(1200px 500px at 10% -10%, var(--bg-glow) 0%, transparent 55%),
         var(--bg);
       color: var(--text);
+      transition: background 0.2s ease, color 0.2s ease;
     }
     body.modal-open { overflow: hidden; }
     .brand {
       display: flex;
       align-items: center;
-      gap: 0.85rem;
+      justify-content: space-between;
+      gap: 1rem;
       margin-bottom: 1.35rem;
     }
+    .brand-left {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      min-width: 0;
+    }
+    .theme-toggle {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      color: var(--muted);
+      border-radius: 10px;
+      padding: 0.48rem 0.8rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      letter-spacing: 0.02em;
+    }
+    .theme-toggle:hover { color: var(--text); border-color: var(--accent); }
+    .theme-toggle svg { width: 1rem; height: 1rem; flex-shrink: 0; }
     .brand-logo {
       width: 2.75rem;
       height: 2.75rem;
@@ -62,7 +177,7 @@
       font-weight: 800;
       letter-spacing: -0.04em;
       line-height: 1.1;
-      background: linear-gradient(135deg, #f0f3f8 0%, #9ec1ff 55%, #51b9ff 100%);
+      background: var(--brand-gradient);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
@@ -96,11 +211,11 @@
       font-weight: 650;
       cursor: pointer;
     }
-    .tab.active { color: #071018; border-color: transparent; }
+    .tab.active { color: var(--tab-active-text); border-color: transparent; }
     .tab.active[data-provider="digitalocean"] { background: var(--accent); }
     .tab.active[data-provider="vultr"] { background: var(--vultr); }
     .tab.active[data-provider="linode"] { background: var(--linode); }
-    .tab.active[data-tab="logs"] { background: #8b93ff; color: #071018; }
+    .tab.active[data-tab="logs"] { background: var(--logs-tab); color: var(--tab-active-text); }
     .view-panel { display: block; }
     .view-panel.hidden { display: none; }
     .tab:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -127,12 +242,12 @@
       margin: 0 0 1.6rem;
     }
     code, .chip {
-      font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: var(--font-mono);
       font-size: 0.8rem;
       background: var(--chip);
       border-radius: 6px;
       padding: 0.12rem 0.4rem;
-      color: #d5dbe7;
+      color: var(--chip-text);
     }
     .card {
       background: var(--card);
@@ -151,7 +266,7 @@
       padding: 0.75rem 0.9rem;
       border-radius: 10px;
       background: var(--info-bg);
-      border: 1px solid #243a5c;
+      border: 1px solid var(--info-border);
       color: var(--info);
       font-size: 0.88rem;
       font-weight: 550;
@@ -160,7 +275,7 @@
     .spinner {
       width: 1.1rem;
       height: 1.1rem;
-      border: 2px solid rgba(158, 193, 255, 0.25);
+      border: 2px solid var(--spinner-track);
       border-top-color: var(--info);
       border-radius: 50%;
       animation: spin 0.75s linear infinite;
@@ -182,12 +297,12 @@
       border: 1px solid var(--line);
       border-radius: 10px;
       font-size: 1rem;
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-family: var(--font-mono);
       background: var(--bg-elev);
       color: var(--text);
     }
     input[type="text"]:focus {
-      outline: 2px solid #3159a8;
+      outline: 2px solid var(--focus-ring);
       border-color: var(--accent);
     }
     .row {
@@ -206,14 +321,14 @@
       font-family: inherit;
     }
     button:disabled { opacity: 0.55; cursor: not-allowed; }
-    .primary { background: var(--accent); color: #071018; }
+    .primary { background: var(--accent); color: var(--primary-on); }
     .primary.vultr { background: var(--vultr); }
-    .primary.linode { background: var(--linode); color: #041810; }
-    .primary.danger { background: #c03943; color: #fff; }
+    .primary.linode { background: var(--linode); color: var(--primary-linode-on); }
+    .primary.danger { background: var(--btn-danger-solid); color: #fff; }
     .primary:hover:not(:disabled) { filter: brightness(1.08); }
-    .ghost { background: #262b34; color: var(--text); }
-    .danger { background: #8f2d32; color: #ffe9ea; }
-    .okbtn { background: #1d6b45; color: #ddffe9; }
+    .ghost { background: var(--ghost-bg); color: var(--text); }
+    .danger { background: var(--btn-danger); color: var(--btn-danger-text); }
+    .okbtn { background: var(--btn-ok); color: var(--btn-ok-text); }
     .meta { margin-top: 0.95rem; color: var(--muted); font-size: 0.78rem; }
     .panel {
       margin-top: 1rem;
@@ -347,7 +462,7 @@
       background: currentColor;
     }
     .pill.active, .pill.running { background: var(--ok-bg); color: var(--ok); }
-    .pill.off, .pill.stopped { background: #2a2e36; color: #b7bec9; }
+    .pill.off, .pill.stopped { background: var(--pill-stopped-bg); color: var(--pill-stopped-text); }
     .pill.new { background: var(--warn-bg); color: var(--warn); }
     .status {
       margin-top: 1rem;
@@ -356,7 +471,7 @@
       font-size: 0.9rem;
       display: none;
       white-space: pre-wrap;
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-family: var(--font-mono);
       line-height: 1.45;
     }
     .status.show { display: block; }
@@ -371,11 +486,11 @@
       font-size: 0.78rem;
       line-height: 1.5;
     }
-    .footer strong { color: #c5ceda; font-weight: 600; }
+    .footer strong { color: var(--footer-strong); font-weight: 600; }
     .modal-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(5, 8, 14, 0.72);
+      background: var(--modal-backdrop);
       backdrop-filter: blur(4px);
       display: none;
       align-items: center;
@@ -390,7 +505,7 @@
       border: 1px solid var(--line);
       border-radius: 16px;
       padding: 1.35rem 1.35rem 1.15rem;
-      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 24px 64px var(--modal-shadow);
     }
     .modal h3 {
       margin: 0 0 0.55rem;
@@ -466,16 +581,16 @@
       font-weight: 700;
       letter-spacing: 0.05em;
       text-transform: uppercase;
-      background: rgba(0, 0, 0, 0.15);
+      background: var(--table-head-bg);
       white-space: nowrap;
     }
     .logs-table tbody tr:last-child td { border-bottom: 0; }
-    .logs-table tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+    .logs-table tbody tr:hover { background: var(--table-row-hover); }
     .logs-table .col-time {
       white-space: nowrap;
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-family: var(--font-mono);
       font-size: 0.8rem;
-      color: #c5ceda;
+      color: var(--log-time);
     }
     .logs-table .col-upstream {
       word-break: break-word;
@@ -486,7 +601,7 @@
       display: block;
       margin-top: 0.15rem;
       color: var(--muted);
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-family: var(--font-mono);
       font-size: 0.74rem;
     }
     .op-pill {
@@ -497,7 +612,7 @@
       font-weight: 700;
       white-space: nowrap;
     }
-    .op-pill.power { background: #1a2840; color: #9ec1ff; }
+    .op-pill.power { background: var(--op-power-bg); color: var(--op-power-text); }
     .op-pill.stop { background: var(--danger-bg); color: var(--danger); }
     .op-pill.start { background: var(--ok-bg); color: var(--ok); }
     .provider-tag {
@@ -522,11 +637,19 @@
 <body>
   <main>
     <header class="brand">
-      <img class="brand-logo" src="/logo.svg" width="44" height="44" alt="" />
-      <div class="brand-text">
-        <span class="brand-name">Dropkick</span>
-        <span class="brand-tag">Power cycle · stop · start cloud servers</span>
+      <div class="brand-left">
+        <img class="brand-logo" src="/logo.svg" width="44" height="44" alt="" />
+        <div class="brand-text">
+          <span class="brand-name">Dropkick</span>
+          <span class="brand-tag">Power cycle · stop · start cloud servers</span>
+        </div>
       </div>
+      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light mode">
+        <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <span id="theme-label">Light</span>
+      </button>
     </header>
 
     <div class="tabs" id="tabs">
