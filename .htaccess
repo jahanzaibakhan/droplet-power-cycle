@@ -1,0 +1,8 @@
+# Cloudways: proxy this PHP app URL to the Node process on localhost.
+Options -Indexes
+DirectoryIndex disabled
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+</IfModule>

@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Droplet Power Cycle</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0c0e;
+      --bg-elev: #14161a;
+      --card: #1a1d23;
+      --text: #e8eaed;
+      --muted: #9aa3af;
+      --line: #2a2f38;
+      --chip: #2b3038;
+      --accent: #4d8dff;
+      --accent-hover: #6aa0ff;
+      --ok: #3dd68c;
+      --ok-bg: #123526;
+      --warn: #f5c16c;
+      --warn-bg: #3a2d12;
+      --danger: #ff6b6b;
+      --danger-bg: #3a1518;
+      --info: #9ec1ff;
+      --info-bg: #152238;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #182033 0%, transparent 55%),
+        var(--bg);
+      color: var(--text);
+    }
+    main {
+      max-width: 44rem;
+      margin: 0 auto;
+      padding: 2.75rem 1.25rem 3rem;
+    }
+    .kicker {
+      color: var(--accent);
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin: 0 0 0.55rem;
+    }
+    h1 {
+      font-size: 1.85rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0 0 0.45rem;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 0.98rem;
+      line-height: 1.5;
+      margin: 0 0 1.6rem;
+    }
+    code, .chip {
+      font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      background: var(--chip);
+      border-radius: 6px;
+      padding: 0.12rem 0.4rem;
+      color: #d5dbe7;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1.35rem;
+    }
+    label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.45rem;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.78rem 0.85rem;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      font-size: 1rem;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      background: var(--bg-elev);
+      color: var(--text);
+    }
+    input[type="text"]:focus {
+      outline: 2px solid #3159a8;
+      border-color: var(--accent);
+    }
+    .row {
+      display: flex;
+      gap: 0.55rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+    button {
+      border: 0;
+      border-radius: 9px;
+      padding: 0.68rem 0.95rem;
+      font-size: 0.92rem;
+      font-weight: 650;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .primary { background: var(--accent); color: #071018; }
+    .primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .ghost { background: #262b34; color: var(--text); }
+    .danger { background: #8f2d32; color: #ffe9ea; }
+    .okbtn { background: #1d6b45; color: #ddffe9; }
+    .meta { margin-top: 0.95rem; color: var(--muted); font-size: 0.78rem; }
+    .panel {
+      margin-top: 1rem;
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1rem 1.05rem;
+      display: none;
+    }
+    .panel.show { display: block; }
+    .panel h2 {
+      margin: 0 0 0.7rem;
+      font-size: 0.95rem;
+      font-weight: 650;
+    }
+    .facts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+      gap: 0.65rem 1rem;
+    }
+    .fact span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.2rem;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border-radius: 999px;
+      padding: 0.18rem 0.55rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: capitalize;
+    }
+    .pill::before {
+      content: "";
+      width: 0.45rem;
+      height: 0.45rem;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .pill.active { background: var(--ok-bg); color: var(--ok); }
+    .pill.off, .pill.archive { background: #2a2e36; color: #b7bec9; }
+    .pill.new { background: var(--warn-bg); color: var(--warn); }
+    .status {
+      margin-top: 1rem;
+      padding: 0.9rem 1rem;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      display: none;
+      white-space: pre-wrap;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      line-height: 1.45;
+    }
+    .status.show { display: block; }
+    .status.info { background: var(--info-bg); color: var(--info); }
+    .status.ok { background: var(--ok-bg); color: var(--ok); }
+    .status.err { background: var(--danger-bg); color: var(--danger); }
+    .status.warn { background: var(--warn-bg); color: var(--warn); }
+    .footer {
+      margin-top: 1.75rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+    .footer strong { color: #c5ceda; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="kicker">DigitalOcean</p>
+    <h1>Droplet control</h1>
+    <p class="sub">Look up a droplet by public IPv4, then power cycle, stop, or start it. The API token never leaves the server.</p>
+
+    <div class="card">
+      <label for="ip">Public IPv4</label>
+      <input id="ip" type="text" list="droplet-options" placeholder="161.35.221.71" autocomplete="off" />
+      <datalist id="droplet-options"></datalist>
+
+      <div class="panel" id="droplet-panel">
+        <h2>Current droplet</h2>
+        <div class="facts" id="droplet-facts"></div>
+      </div>
+
+      <div class="row">
+        <button class="primary" id="cycle-btn" type="button" data-action="power_cycle">Power cycle</button>
+        <button class="danger" id="stop-btn" type="button" data-action="stop">Stop</button>
+        <button class="okbtn" id="start-btn" type="button" data-action="start">Start</button>
+        <button class="ghost" id="refresh-btn" type="button">Refresh list</button>
+      </div>
+      <p class="meta" id="meta">Loading droplet list…</p>
+      <div class="status" id="status" role="status"></div>
+    </div>
+    <p class="footer">Droplet Power Cycle · <strong id="app-version">v…</strong></p>
+  </main>
+
+  <script>
+    const ipInput = document.getElementById("ip");
+    const datalist = document.getElementById("droplet-options");
+    const refreshBtn = document.getElementById("refresh-btn");
+    const meta = document.getElementById("meta");
+    const statusEl = document.getElementById("status");
+    const panel = document.getElementById("droplet-panel");
+    const facts = document.getElementById("droplet-facts");
+    const actionBtns = Array.from(document.querySelectorAll("[data-action]"));
+
+    const ACTION_COPY = {
+      power_cycle: { verb: "power cycle", doing: "Power cycling", done: "power cycle completed" },
+      stop: { verb: "stop", doing: "Stopping", done: "droplet powered off" },
+      start: { verb: "start", doing: "Starting", done: "droplet started" },
+    };
+
+    let droplets = [];
+    let pollTimer = null;
+    let suggestTimer = null;
+    let lookupTimer = null;
+    let busy = false;
+
+    function showStatus(kind, text) {
+      statusEl.className = "status show " + kind;
+      statusEl.textContent = text;
+    }
+
+    function setBusy(on, label) {
+      busy = on;
+      actionBtns.forEach((btn) => {
+        btn.disabled = on;
+        if (btn.dataset.action === "power_cycle") btn.textContent = on && label ? label : "Power cycle";
+      });
+      refreshBtn.disabled = on;
+    }
+
+    function clearPoll() {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    function currentIp() {
+      let ip = ipInput.value.trim();
+      const named = ip.match(/\((\d{1,3}(?:\.\d{1,3}){3})\)\s*$/);
+      if (named) ip = named[1];
+      return ip;
+    }
+
+    function lookupByIp(ip) {
+      return droplets.find((d) => d.ip === ip);
+    }
+
+    function renderDatalist() {
+      datalist.innerHTML = "";
+      droplets.forEach((d) => {
+        const opt = document.createElement("option");
+        opt.value = d.ip;
+        opt.label = d.name + " (" + d.ip + ")";
+        opt.textContent = d.name + " (" + d.ip + ")";
+        datalist.appendChild(opt);
+      });
+    }
+
+    function renderDroplet(d) {
+      if (!d) {
+        panel.classList.remove("show");
+        return;
+      }
+      const pillClass = d.status === "active" ? "active" : d.status === "off" ? "off" : "new";
+      facts.innerHTML =
+        fact("Name", d.name) +
+        fact("Status", '<span class="pill ' + pillClass + '">' + (d.status || "unknown") + "</span>", true) +
+        fact("IP", '<span class="chip">' + (d.ip || "—") + "</span>", true) +
+        fact("ID", d.id) +
+        fact("Region", d.region || "—") +
+        fact("Size", d.size || "—");
+      panel.classList.add("show");
+    }
+
+    function fact(label, value, html) {
+      return (
+        '<div class="fact"><span>' + label + "</span><strong>" +
+        (html ? value : String(value == null ? "—" : value)) +
+        "</strong></div>"
+      );
+    }
+
+    async function loadDroplets() {
+      const res = await fetch("/api/droplets", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load droplets");
+      droplets = data.droplets || [];
+      renderDatalist();
+      const count = data.count != null ? data.count : droplets.length;
+      const when = data.lastRefreshAt ? new Date(data.lastRefreshAt).toLocaleString() : "never";
+      let line = count + " public IP(s) cached · last refresh " + when;
+      if (data.refreshing) line += " · still indexing DigitalOcean…";
+      if (data.knownTotal) line += " · account total " + data.knownTotal;
+      if (data.lastRefreshError) line += " · last error: " + data.lastRefreshError;
+      meta.textContent = line;
+    }
+
+    async function suggest(q) {
+      if (!q || q.length < 2) return;
+      const res = await fetch("/api/droplets?q=" + encodeURIComponent(q), { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) return;
+      droplets = data.droplets || [];
+      renderDatalist();
+    }
+
+    async function loadDropletCard(ip) {
+      if (!/^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(ip)) {
+        renderDroplet(null);
+        return;
+      }
+      const res = await fetch("/api/droplet?ip=" + encodeURIComponent(ip), { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) {
+        renderDroplet(null);
+        return;
+      }
+      renderDroplet(data.droplet);
+    }
+
+    function actionSettled(kind, data, startedAt) {
+      const status = String(data.status || "").toLowerCase().replace(/_/g, "-");
+      const dropletStatus = String(data.droplet_status || "").toLowerCase();
+      const elapsed = Date.now() - startedAt;
+      if (status === "completed" || status === "errored") return status;
+      if (elapsed < 8000) return null;
+      if ((kind === "power_cycle" || kind === "start") && dropletStatus === "active") {
+        return "completed";
+      }
+      if (kind === "stop" && dropletStatus === "off") return "completed";
+      return null;
+    }
+
+    async function pollStatus(kind, actionId, dropletId, name, ip, startedAt) {
+      const copy = ACTION_COPY[kind];
+      try {
+        const res = await fetch(
+          "/api/action-status/" + encodeURIComponent(actionId) +
+          "?droplet_id=" + encodeURIComponent(dropletId) +
+          "&t=" + Date.now(),
+          { cache: "no-store" }
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Status check failed");
+
+        const settled = actionSettled(kind, data, startedAt);
+        const dropletStatus = data.droplet_status || "unknown";
+        if (settled === "completed") {
+          setBusy(false);
+          showStatus("ok", name + " (" + ip + ") " + copy.done + ".\nDroplet status: " + dropletStatus);
+          loadDropletCard(ip).catch(() => {});
+          return;
+        }
+        if (settled === "errored") {
+          setBusy(false);
+          showStatus("err", name + " (" + ip + ") " + copy.verb + " errored.");
+          loadDropletCard(ip).catch(() => {});
+          return;
+        }
+        if (Date.now() - startedAt > 180000) {
+          setBusy(false);
+          showStatus(
+            "warn",
+            copy.doing + " " + name + " is still " + (data.status || "in-progress") +
+            " after 3 minutes.\nCurrent droplet status: " + dropletStatus
+          );
+          loadDropletCard(ip).catch(() => {});
+          return;
+        }
+
+        showStatus(
+          "info",
+          copy.doing + " " + name + " (" + ip + ")...\naction: " + (data.status || "in-progress") +
+          " · droplet: " + dropletStatus
+        );
+        pollTimer = setTimeout(() => pollStatus(kind, actionId, dropletId, name, ip, startedAt), 2000);
+      } catch (err) {
+        setBusy(false);
+        showStatus("err", err.message);
+      }
+    }
+
+    async function runAction(kind) {
+      const ip = currentIp();
+      const copy = ACTION_COPY[kind];
+      if (!ip) {
+        showStatus("err", "Enter a public IPv4 address.");
+        return;
+      }
+
+      let known = lookupByIp(ip);
+      if (!known) {
+        try {
+          const look = await fetch("/api/droplets?q=" + encodeURIComponent(ip), { cache: "no-store" });
+          const lookData = await look.json();
+          known = (lookData.droplets || []).find((d) => d.ip === ip) || null;
+        } catch (_) {}
+      }
+      const name = known ? known.name : "this droplet";
+      if (!confirm("Are you sure you want to " + copy.verb + " " + name + " (" + ip + ")?")) return;
+
+      clearPoll();
+      setBusy(true, copy.doing + "…");
+      showStatus("info", "Starting " + copy.verb + " for " + name + " (" + ip + ")…");
+
+      try {
+        const res = await fetch("/api/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({ ip, action: kind }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Request failed");
+
+        const dropletName = data.droplet_name || name;
+        showStatus(
+          "info",
+          copy.doing + " " + dropletName + " (" + ip + ")...\nAction ID: " + data.action_id
+        );
+        pollStatus(kind, data.action_id, data.droplet_id, dropletName, ip, Date.now());
+      } catch (err) {
+        setBusy(false);
+        showStatus("err", err.message);
+      }
+    }
+
+    actionBtns.forEach((btn) => {
+      btn.addEventListener("click", () => runAction(btn.dataset.action));
+    });
+
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "Refreshing…";
+      try {
+        const res = await fetch("/api/refresh", { method: "POST", cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Refresh failed");
+        showStatus("ok", "Droplet list refresh started.");
+        loadDroplets().catch(() => {});
+      } catch (err) {
+        showStatus("err", err.message);
+      } finally {
+        refreshBtn.disabled = busy;
+        refreshBtn.textContent = "Refresh list";
+      }
+    });
+
+    ipInput.addEventListener("input", () => {
+      const q = ipInput.value.trim();
+      clearTimeout(suggestTimer);
+      clearTimeout(lookupTimer);
+      suggestTimer = setTimeout(() => suggest(currentIp() || q).catch(() => {}), 250);
+      lookupTimer = setTimeout(() => loadDropletCard(currentIp()).catch(() => {}), 400);
+    });
+
+    loadDroplets().catch((err) => {
+      meta.textContent = "Could not load droplet list.";
+      showStatus("err", err.message);
+    });
+
+    fetch("/api/version", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        document.getElementById("app-version").textContent = "v" + (d.version || "?");
+      })
+      .catch(() => {
+        document.getElementById("app-version").textContent = "v1.1.0";
+      });
+  </script>
+</body>
+</html>
