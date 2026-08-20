@@ -147,10 +147,10 @@ function createVultrProvider(token) {
 
   async function fetchAllInstances() {
     cacheRefreshing = true;
+    const nextMap = new Map(ipToInstance);
     try {
       let cursor = "";
       let page = 0;
-      ipToInstance.clear();
 
       while (true) {
         page += 1;
@@ -158,17 +158,26 @@ function createVultrProvider(token) {
         if (cursor) qs.set("cursor", cursor);
         const { body } = await apiFetch(`/instances?${qs}`);
         const instances = body.instances || [];
-        ingestInstances(instances);
+        for (const inst of instances) {
+          if (inst && inst.main_ip) {
+            nextMap.set(inst.main_ip, {
+              id: inst.id,
+              name: inst.label || inst.hostname || inst.id,
+            });
+          }
+        }
+        ipToInstance.clear();
+        for (const [ip, info] of nextMap) ipToInstance.set(ip, info);
         cacheKnownTotal = (body.meta && body.meta.total) || ipToInstance.size;
         cursor = (body.meta && body.meta.links && body.meta.links.next) || "";
-        if (!cursor) break;
-        if (page % 5 === 0) {
-          console.log(`Vultr cache progress: ${ipToInstance.size} IPs (page ${page})`);
+        if (page % 5 === 0 || !cursor) {
+          lastRefreshAt = new Date().toISOString();
           saveDiskCache();
+          console.log(`Vultr cache progress: ${ipToInstance.size} IPs (page ${page})`);
         }
+        if (!cursor) break;
       }
 
-      lastRefreshAt = new Date().toISOString();
       lastRefreshError = null;
       saveDiskCache();
       console.log(`Vultr cache refreshed: ${ipToInstance.size} public IP(s)`);
@@ -229,18 +238,27 @@ function createVultrProvider(token) {
     if (ipToInstance.has(ip)) return ipToInstance.get(ip);
 
     let cursor = "";
+    let pages = 0;
     while (true) {
+      pages += 1;
       const qs = new URLSearchParams({ per_page: String(PER_PAGE) });
       if (cursor) qs.set("cursor", cursor);
       const { body } = await apiFetch(`/instances?${qs}`);
       for (const inst of body.instances || []) {
-        ingestInstances([inst]);
-        if (inst.main_ip === ip) {
-          return ipToInstance.get(ip);
+        if (inst && inst.main_ip) {
+          ipToInstance.set(inst.main_ip, {
+            id: inst.id,
+            name: inst.label || inst.hostname || inst.id,
+          });
+          if (inst.main_ip === ip) {
+            saveDiskCache();
+            return ipToInstance.get(ip);
+          }
         }
       }
       cursor = (body.meta && body.meta.links && body.meta.links.next) || "";
       if (!cursor) break;
+      if (pages > 120) break;
     }
     return null;
   }

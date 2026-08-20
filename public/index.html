@@ -317,6 +317,8 @@
       return PROVIDERS[provider];
     }
 
+    let lookupBusy = false;
+
     function showStatus(kind, text) {
       statusEl.className = "status show " + kind;
       statusEl.textContent = text;
@@ -422,6 +424,7 @@
       if (data.refreshing) line += " · still " + c.metaIndexing + "…";
       if (data.knownTotal) line += " · account total " + data.knownTotal;
       if (data.truncated) line += " · type to search by name or IP";
+      if (!data.lastRefreshAt && count > 0) line += " · partial index (lookup by IP still works)";
       if (data.lastRefreshError) line += " · last error: " + data.lastRefreshError;
       meta.textContent = line;
     }
@@ -442,13 +445,24 @@
         return;
       }
       const c = cfg();
-      const res = await fetch(c.instancePath(ip), { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) {
+      lookupBusy = true;
+      showStatus("info", "Looking up " + ip + " on " + c.label + "…");
+      try {
+        const res = await fetch(c.instancePath(ip), { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) {
+          renderServer(null);
+          showStatus("err", data.error || "Instance not found on " + c.label + ".");
+          return;
+        }
+        renderServer(c.parseInstance(data));
+        if (!busy) statusEl.className = "status";
+      } catch (err) {
         renderServer(null);
-        return;
+        showStatus("err", err.message);
+      } finally {
+        lookupBusy = false;
       }
-      renderServer(c.parseInstance(data));
     }
 
     function actionSettled(kind, data, startedAt) {
@@ -536,7 +550,7 @@
       clearPoll();
       const startedAt = Date.now();
       setBusy(true, copy.doing + "…");
-      showStatus("info", "Starting " + copy.verb + " for " + name + " (" + ip + ")…");
+      showStatus("info", "Resolving " + ip + " on " + c.label + "…");
 
       try {
         const res = await fetch(c.actionPath(), {
@@ -573,10 +587,15 @@
       setBusy(false);
       statusEl.className = "status";
       applyProviderUi();
-      loadList().catch((err) => {
-        meta.textContent = "Could not load list.";
-        showStatus("err", err.message);
-      });
+      loadList()
+        .then(() => {
+          const ip = currentIp();
+          if (ip) return loadServerCard(ip);
+        })
+        .catch((err) => {
+          meta.textContent = "Could not load list.";
+          showStatus("err", err.message);
+        });
     }
 
     tabBtns.forEach((btn) => {

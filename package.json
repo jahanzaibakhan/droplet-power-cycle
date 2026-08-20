@@ -1,6 +1,6 @@
 {
   "name": "droplet-power-cycle",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Power cycle, stop, and start DigitalOcean droplets by public IPv4",
   "main": "server.js",
