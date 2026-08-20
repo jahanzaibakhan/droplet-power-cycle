@@ -1,22 +1,28 @@
 const fs = require("fs");
 const path = require("path");
 
-const VULTR_API = "https://api.vultr.com/v2";
+const LINODE_API = "https://api.linode.com/v4";
 const PER_PAGE = 500;
-const CACHE_FILE = path.join(__dirname, "..", "data", "vultr-cache.json");
+const CACHE_FILE = path.join(__dirname, "..", "data", "linode-cache.json");
 const LIST_FULL_LIMIT = 400;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const ACTION_TYPES = {
-  power_cycle: { path: (id) => `/instances/${id}/reboot`, method: "POST", label: "power cycle" },
-  restart: { path: (id) => `/instances/${id}/reboot`, method: "POST", label: "power cycle" },
-  reboot: { path: (id) => `/instances/${id}/reboot`, method: "POST", label: "power cycle" },
-  stop: { path: (id) => `/instances/${id}/halt`, method: "POST", label: "stop" },
-  start: { path: (id) => `/instances/${id}/start`, method: "POST", label: "start" },
+  power_cycle: { path: (id) => `/linode/instances/${id}/reboot`, method: "POST", label: "power cycle" },
+  restart: { path: (id) => `/linode/instances/${id}/reboot`, method: "POST", label: "power cycle" },
+  reboot: { path: (id) => `/linode/instances/${id}/reboot`, method: "POST", label: "power cycle" },
+  stop: { path: (id) => `/linode/instances/${id}/shutdown`, method: "POST", label: "stop" },
+  start: { path: (id) => `/linode/instances/${id}/boot`, method: "POST", label: "start" },
 };
 
-function createVultrProvider(token) {
-  /** @type {Map<string, { id: string, name: string }>} */
+function publicIpv4(instance) {
+  const ips = instance && instance.ipv4;
+  if (!Array.isArray(ips)) return null;
+  return ips.find((ip) => ip && !String(ip).startsWith("192.168.")) || ips[0] || null;
+}
+
+function createLinodeProvider(token) {
+  /** @type {Map<string, { id: number, name: string }>} */
   const ipToInstance = new Map();
   let lastRefreshAt = null;
   let lastRefreshError = null;
@@ -28,20 +34,22 @@ function createVultrProvider(token) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  function headers() {
+  function headers(extra = {}) {
     return {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...extra,
     };
   }
 
   function ingestInstances(instances) {
     for (const inst of instances || []) {
-      if (inst && inst.main_ip) {
-        ipToInstance.set(inst.main_ip, {
+      const ip = publicIpv4(inst);
+      if (ip) {
+        ipToInstance.set(ip, {
           id: inst.id,
-          name: inst.label || inst.hostname || inst.id,
+          name: inst.label || String(inst.id),
         });
       }
     }
@@ -59,10 +67,10 @@ function createVultrProvider(token) {
         }
       }
       lastRefreshAt = parsed.lastRefreshAt || null;
-      console.log(`Loaded ${ipToInstance.size} Vultr IP(s) from disk cache`);
+      console.log(`Loaded ${ipToInstance.size} Linode IP(s) from disk cache`);
       return ipToInstance.size;
     } catch (err) {
-      console.error("Could not load Vultr disk cache:", err.message);
+      console.error("Could not load Linode disk cache:", err.message);
       return 0;
     }
   }
@@ -80,24 +88,27 @@ function createVultrProvider(token) {
         JSON.stringify({ lastRefreshAt, count: instances.length, instances })
       );
     } catch (err) {
-      console.error("Could not save Vultr disk cache:", err.message);
+      console.error("Could not save Linode disk cache:", err.message);
     }
   }
 
   function mapError(status, body) {
-    const message = (body && (body.error || body.message)) || "Vultr API request failed";
+    const errors = body && body.errors;
+    const message =
+      (Array.isArray(errors) && errors.map((e) => e.reason || e.field).filter(Boolean).join("; ")) ||
+      (body && body.error) ||
+      "Linode API request failed";
     if (status === 401 || status === 403) {
       return {
         status: 401,
-        error:
-          "Invalid or unauthorized Vultr API key. Check VULTR_API_KEY and IP allowlist (157.245.109.69).",
+        error: "Invalid or unauthorized Linode API token. Check LINODE_API_TOKEN.",
       };
     }
     if (status === 429) {
-      return { status: 429, error: "Vultr API rate limit reached. Wait and try again." };
+      return { status: 429, error: "Linode API rate limit reached. Wait and try again." };
     }
     if (status === 404) {
-      return { status: 404, error: message || "Instance not found on Vultr." };
+      return { status: 404, error: message || "Linode not found." };
     }
     return { status: status >= 400 ? status : 502, error: message };
   }
@@ -105,13 +116,13 @@ function createVultrProvider(token) {
   async function apiFetch(urlPath, options = {}, attempt = 0) {
     let res;
     try {
-      res = await fetch(`${VULTR_API}${urlPath}`, {
+      res = await fetch(`${LINODE_API}${urlPath}`, {
         ...options,
         headers: { ...headers(), ...(options.headers || {}) },
         signal: options.signal || AbortSignal.timeout(60000),
       });
     } catch (err) {
-      const error = new Error("Unable to reach the Vultr API");
+      const error = new Error("Unable to reach the Linode API");
       error.status = 502;
       error.cause = err;
       throw error;
@@ -119,7 +130,7 @@ function createVultrProvider(token) {
 
     if ((res.status === 429 || res.status >= 500) && attempt < 6) {
       const waitMs = 1500 * (attempt + 1);
-      console.warn(`Vultr ${res.status} on ${urlPath} — retrying in ${waitMs}ms`);
+      console.warn(`Linode ${res.status} on ${urlPath} — retrying in ${waitMs}ms`);
       await sleep(waitMs);
       return apiFetch(urlPath, options, attempt + 1);
     }
@@ -149,38 +160,40 @@ function createVultrProvider(token) {
     cacheRefreshing = true;
     const nextMap = new Map(ipToInstance);
     try {
-      let cursor = "";
-      let page = 0;
+      let page = 1;
+      let pages = 1;
 
-      while (true) {
-        page += 1;
-        const qs = new URLSearchParams({ per_page: String(PER_PAGE) });
-        if (cursor) qs.set("cursor", cursor);
-        const { body } = await apiFetch(`/instances?${qs}`);
-        const instances = body.instances || [];
+      while (page <= pages) {
+        const qs = new URLSearchParams({
+          page: String(page),
+          page_size: String(PER_PAGE),
+        });
+        const { body } = await apiFetch(`/linode/instances?${qs}`);
+        const instances = body.data || [];
         for (const inst of instances) {
-          if (inst && inst.main_ip) {
-            nextMap.set(inst.main_ip, {
+          const ip = publicIpv4(inst);
+          if (ip) {
+            nextMap.set(ip, {
               id: inst.id,
-              name: inst.label || inst.hostname || inst.id,
+              name: inst.label || String(inst.id),
             });
           }
         }
         ipToInstance.clear();
         for (const [ip, info] of nextMap) ipToInstance.set(ip, info);
-        cacheKnownTotal = (body.meta && body.meta.total) || ipToInstance.size;
-        cursor = (body.meta && body.meta.links && body.meta.links.next) || "";
-        if (page % 5 === 0 || !cursor) {
+        pages = body.pages || 1;
+        cacheKnownTotal = body.results || ipToInstance.size;
+        if (page % 5 === 0 || page === pages) {
           lastRefreshAt = new Date().toISOString();
           saveDiskCache();
-          console.log(`Vultr cache progress: ${ipToInstance.size} IPs (page ${page})`);
+          console.log(`Linode cache progress: ${ipToInstance.size} IPs (page ${page}/${pages})`);
         }
-        if (!cursor) break;
+        page += 1;
       }
 
       lastRefreshError = null;
       saveDiskCache();
-      console.log(`Vultr cache refreshed: ${ipToInstance.size} public IP(s)`);
+      console.log(`Linode cache refreshed: ${ipToInstance.size} public IP(s)`);
       return ipToInstance.size;
     } finally {
       cacheRefreshing = false;
@@ -192,7 +205,7 @@ function createVultrProvider(token) {
     refreshInFlight = fetchAllInstances()
       .catch((err) => {
         lastRefreshError = err.message;
-        console.error("Vultr cache refresh failed:", err.message);
+        console.error("Linode cache refresh failed:", err.message);
         throw err;
       })
       .finally(() => {
@@ -230,67 +243,78 @@ function createVultrProvider(token) {
   }
 
   async function fetchInstanceById(id) {
-    const { body } = await apiFetch(`/instances/${id}`);
-    return body.instance;
+    const { body } = await apiFetch(`/linode/instances/${id}`);
+    return body;
   }
 
   async function resolveByIp(ip) {
     if (ipToInstance.has(ip)) return ipToInstance.get(ip);
 
-    let cursor = "";
-    let pages = 0;
-    while (true) {
-      pages += 1;
-      const qs = new URLSearchParams({ per_page: String(PER_PAGE) });
-      if (cursor) qs.set("cursor", cursor);
-      const { body } = await apiFetch(`/instances?${qs}`);
-      for (const inst of body.instances || []) {
-        if (inst && inst.main_ip) {
-          ipToInstance.set(inst.main_ip, {
-            id: inst.id,
-            name: inst.label || inst.hostname || inst.id,
-          });
-          if (inst.main_ip === ip) {
-            saveDiskCache();
-            return ipToInstance.get(ip);
-          }
+    try {
+      const { body } = await apiFetch("/linode/instances", {
+        headers: { "X-Filter": JSON.stringify({ ipv4: ip }) },
+      });
+      for (const inst of body.data || []) {
+        ingestInstances([inst]);
+        const matchIp = publicIpv4(inst);
+        if (matchIp === ip) {
+          saveDiskCache();
+          return ipToInstance.get(ip);
         }
       }
-      cursor = (body.meta && body.meta.links && body.meta.links.next) || "";
-      if (!cursor) break;
-      if (pages > 120) break;
+    } catch (err) {
+      console.warn(`Linode IP filter lookup failed for ${ip}:`, err.message);
+    }
+
+    let page = 1;
+    let pages = 1;
+    while (page <= pages && page <= 120) {
+      const qs = new URLSearchParams({
+        page: String(page),
+        page_size: String(PER_PAGE),
+      });
+      const { body } = await apiFetch(`/linode/instances?${qs}`);
+      pages = body.pages || 1;
+      for (const inst of body.data || []) {
+        ingestInstances([inst]);
+        if (publicIpv4(inst) === ip) {
+          saveDiskCache();
+          return ipToInstance.get(ip);
+        }
+      }
+      page += 1;
     }
     return null;
   }
 
   function summarize(instance, fallbackIp) {
     const label = (instance.label || "").trim();
-    const hostname = (instance.hostname || "").trim();
+    const specs = instance.specs || {};
+    const diskMb = specs.disk || null;
     return {
       id: instance.id,
-      name: label || hostname || instance.id,
+      name: label || String(instance.id),
       label: label || null,
-      hostname: hostname || null,
+      hostname: label || null,
       status: instance.status,
-      power_status: instance.power_status,
-      server_status: instance.server_status,
+      power_status: instance.status === "running" ? "running" : "stopped",
+      server_status: instance.status,
       region: instance.region || null,
-      size: instance.plan || null,
-      memory: instance.ram || null,
-      vcpus: instance.vcpu_count || null,
-      disk: instance.disk || null,
-      ip: fallbackIp || instance.main_ip || null,
-      ips: instance.main_ip ? [instance.main_ip] : [],
+      size: instance.type || null,
+      memory: specs.memory || null,
+      vcpus: specs.vcpus || null,
+      disk: diskMb ? Math.round(diskMb / 1024) : null,
+      ip: fallbackIp || publicIpv4(instance),
+      ips: instance.ipv4 || [],
     };
   }
 
   function actionComplete(action, instance, elapsedMs) {
-    const power = String(instance.power_status || "").toLowerCase();
-    const server = String(instance.server_status || "").toLowerCase();
-    if (action === "stop") return power === "stopped";
+    const status = String(instance.status || "").toLowerCase();
+    if (action === "stop") return status === "offline" || status === "shutting_down";
     if (elapsedMs < 8000) return false;
     if (action === "power_cycle" || action === "start") {
-      return power === "running" && (server === "ok" || server === "");
+      return status === "running";
     }
     return false;
   }
@@ -306,7 +330,7 @@ function createVultrProvider(token) {
 
     const found = await resolveByIp(ip);
     if (!found) {
-      const error = new Error(`No Vultr instance found with public IPv4 ${ip}.`);
+      const error = new Error(`No Linode found with public IPv4 ${ip}.`);
       error.status = 404;
       throw error;
     }
@@ -319,10 +343,10 @@ function createVultrProvider(token) {
       action: key,
       action_label: spec.label,
       instance_id: found.id,
-      instance_name: live.label || live.hostname || found.name,
+      instance_name: live.label || found.name,
       instance_status: live.status,
-      power_status: live.power_status,
-      server_status: live.server_status,
+      power_status: live.status === "running" ? "running" : "stopped",
+      server_status: live.status,
       ip,
     };
   }
@@ -333,10 +357,10 @@ function createVultrProvider(token) {
     return {
       action,
       instance_id: instance.id,
-      instance_name: instance.label || instance.hostname,
+      instance_name: instance.label,
       instance_status: instance.status,
-      power_status: instance.power_status,
-      server_status: instance.server_status,
+      power_status: instance.status === "running" ? "running" : "stopped",
+      server_status: instance.status,
       status: complete ? "completed" : "in-progress",
       elapsed_ms: elapsed,
     };
@@ -380,7 +404,7 @@ function createVultrProvider(token) {
   function startBackgroundRefresh() {
     loadDiskCache();
     refreshCache().catch((err) => {
-      console.error("Initial Vultr fetch failed:", err.message);
+      console.error("Initial Linode fetch failed:", err.message);
     });
     setInterval(() => refreshCache().catch(() => {}), CACHE_TTL_MS).unref();
   }
@@ -399,4 +423,4 @@ function createVultrProvider(token) {
   };
 }
 
-module.exports = { createVultrProvider };
+module.exports = { createLinodeProvider };

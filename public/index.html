@@ -3,7 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cloud Power Cycle</title>
+  <title>Dropkick — Cloud server control</title>
+  <meta name="description" content="Dropkick — power cycle, stop, and start cloud servers by public IPv4 on DigitalOcean, Vultr, and Linode." />
+  <meta name="application-name" content="Dropkick" />
+  <meta name="theme-color" content="#0b0c0e" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <style>
     :root {
       color-scheme: dark;
@@ -17,6 +22,7 @@
       --accent: #4d8dff;
       --accent-hover: #6aa0ff;
       --vultr: #51b9ff;
+      --linode: #14b87a;
       --ok: #3dd68c;
       --ok-bg: #123526;
       --warn: #f5c16c;
@@ -37,8 +43,40 @@
       color: var(--text);
     }
     body.modal-open { overflow: hidden; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      margin-bottom: 1.35rem;
+    }
+    .brand-logo {
+      width: 2.75rem;
+      height: 2.75rem;
+      flex-shrink: 0;
+      display: block;
+    }
+    .brand-text { min-width: 0; }
+    .brand-name {
+      display: block;
+      font-size: 1.55rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
+      background: linear-gradient(135deg, #f0f3f8 0%, #9ec1ff 55%, #51b9ff 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .brand-tag {
+      display: block;
+      margin-top: 0.2rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 550;
+      letter-spacing: 0.02em;
+    }
     main {
-      max-width: 44rem;
+      max-width: 68rem;
       margin: 0 auto;
       padding: 2.75rem 1.25rem 3rem;
     }
@@ -61,6 +99,10 @@
     .tab.active { color: #071018; border-color: transparent; }
     .tab.active[data-provider="digitalocean"] { background: var(--accent); }
     .tab.active[data-provider="vultr"] { background: var(--vultr); }
+    .tab.active[data-provider="linode"] { background: var(--linode); }
+    .tab.active[data-tab="logs"] { background: #8b93ff; color: #071018; }
+    .view-panel { display: block; }
+    .view-panel.hidden { display: none; }
     .tab:disabled { opacity: 0.4; cursor: not-allowed; }
     .kicker {
       font-size: 0.75rem;
@@ -71,6 +113,7 @@
     }
     .kicker.do { color: var(--accent); }
     .kicker.vultr { color: var(--vultr); }
+    .kicker.linode { color: var(--linode); }
     h1 {
       font-size: 1.85rem;
       font-weight: 700;
@@ -165,6 +208,7 @@
     button:disabled { opacity: 0.55; cursor: not-allowed; }
     .primary { background: var(--accent); color: #071018; }
     .primary.vultr { background: var(--vultr); }
+    .primary.linode { background: var(--linode); color: #041810; }
     .primary.danger { background: #c03943; color: #fff; }
     .primary:hover:not(:disabled) { filter: brightness(1.08); }
     .ghost { background: #262b34; color: var(--text); }
@@ -176,8 +220,9 @@
       background: var(--bg-elev);
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 1rem 1.05rem;
+      padding: 1.15rem 1.35rem;
       display: none;
+      width: 100%;
     }
     .panel.show { display: block; }
     .panel.loading {
@@ -188,11 +233,86 @@
       align-items: center;
       gap: 0.55rem;
     }
-    .panel h2 { margin: 0 0 0.7rem; font-size: 0.95rem; font-weight: 650; }
-    .facts {
+    .panel h2 { margin: 0 0 0.85rem; font-size: 0.95rem; font-weight: 650; }
+    .server-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      width: 100%;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .server-head-main {
+      flex: 1;
+      min-width: 0;
+    }
+    .server-name {
+      font-size: 1.12rem;
+      font-weight: 700;
+      line-height: 1.4;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      color: var(--text);
+    }
+    .server-subname {
+      margin-top: 0.25rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    .server-head-meta { flex-shrink: 0; padding-top: 0.1rem; }
+    .resource-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
-      gap: 0.65rem 1rem;
+      grid-template-columns: repeat(3, minmax(9rem, 1fr));
+      gap: 0.75rem;
+      width: 100%;
+      margin-bottom: 0.65rem;
+    }
+    @media (max-width: 40rem) {
+      .resource-row { grid-template-columns: 1fr; }
+    }
+    .resource-chip {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.65rem 0.75rem;
+      min-width: 0;
+    }
+    .resource-chip span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.2rem;
+    }
+    .resource-chip strong {
+      display: block;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .resource-note {
+      margin: 0 0 1rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.45;
+      width: 100%;
+    }
+    .server-details {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      min-width: 0;
+    }
+    .server-details .facts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+      gap: 0.75rem 1.15rem;
+      width: 100%;
     }
     .fact span {
       display: block;
@@ -202,6 +322,13 @@
       letter-spacing: 0.04em;
       margin-bottom: 0.2rem;
     }
+    .fact strong {
+      display: block;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+    }
+    .fact-wide { grid-column: 1 / -1; }
     .pill {
       display: inline-flex;
       align-items: center;
@@ -296,15 +423,120 @@
       gap: 0.55rem;
       justify-content: flex-end;
     }
+    .logs-section {
+      padding: 1.15rem 1.25rem 1.05rem;
+    }
+    .logs-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.85rem;
+    }
+    .logs-head h2 {
+      margin: 0;
+      font-size: 0.98rem;
+      font-weight: 650;
+    }
+    .logs-head button {
+      padding: 0.45rem 0.75rem;
+      font-size: 0.82rem;
+    }
+    .logs-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--bg-elev);
+    }
+    .logs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+    .logs-table th,
+    .logs-table td {
+      padding: 0.62rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    .logs-table th {
+      color: var(--muted);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: rgba(0, 0, 0, 0.15);
+      white-space: nowrap;
+    }
+    .logs-table tbody tr:last-child td { border-bottom: 0; }
+    .logs-table tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+    .logs-table .col-time {
+      white-space: nowrap;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.8rem;
+      color: #c5ceda;
+    }
+    .logs-table .col-upstream {
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      max-width: 16rem;
+    }
+    .logs-table .col-upstream small {
+      display: block;
+      margin-top: 0.15rem;
+      color: var(--muted);
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.74rem;
+    }
+    .op-pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 0.15rem 0.55rem;
+      font-size: 0.76rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .op-pill.power { background: #1a2840; color: #9ec1ff; }
+    .op-pill.stop { background: var(--danger-bg); color: var(--danger); }
+    .op-pill.start { background: var(--ok-bg); color: var(--ok); }
+    .provider-tag {
+      font-size: 0.74rem;
+      font-weight: 650;
+      color: var(--muted);
+    }
+    .provider-tag.do { color: var(--accent); }
+    .provider-tag.vultr { color: var(--vultr); }
+    .provider-tag.linode { color: var(--linode); }
+    .logs-empty {
+      margin: 0;
+      padding: 1.1rem 0.25rem 0.35rem;
+      color: var(--muted);
+      font-size: 0.86rem;
+      text-align: center;
+    }
+    .logs-empty.hidden { display: none; }
+    .logs-wrap.hidden { display: none; }
   </style>
 </head>
 <body>
   <main>
+    <header class="brand">
+      <img class="brand-logo" src="/logo.svg" width="44" height="44" alt="" />
+      <div class="brand-text">
+        <span class="brand-name">Dropkick</span>
+        <span class="brand-tag">Power cycle · stop · start cloud servers</span>
+      </div>
+    </header>
+
     <div class="tabs" id="tabs">
-      <button type="button" class="tab active" data-provider="digitalocean">DigitalOcean</button>
-      <button type="button" class="tab" data-provider="vultr">Vultr</button>
+      <button type="button" class="tab active" data-tab="digitalocean" data-provider="digitalocean">DigitalOcean</button>
+      <button type="button" class="tab" data-tab="vultr" data-provider="vultr">Vultr</button>
+      <button type="button" class="tab" data-tab="linode" data-provider="linode">Linode</button>
+      <button type="button" class="tab" data-tab="logs">Operation log</button>
     </div>
 
+    <div id="control-view" class="view-panel">
     <p class="kicker do" id="kicker">DigitalOcean</p>
     <h1 id="title">Droplet control</h1>
     <p class="sub" id="subtitle">Look up a server by public IPv4, then power cycle, stop, or start it.</p>
@@ -322,7 +554,7 @@
 
         <div class="panel" id="server-panel">
           <h2 id="panel-title">Current droplet</h2>
-          <div class="facts" id="server-facts"></div>
+          <div class="server-details" id="server-facts"></div>
         </div>
 
         <div class="row">
@@ -335,9 +567,37 @@
         <div class="status" id="status" role="status"></div>
       </div>
     </div>
+    </div>
+
+    <div id="logs-view" class="view-panel hidden">
+    <p class="kicker">History</p>
+    <h1>Operation log</h1>
+    <p class="sub">Power cycle, stop, and start actions across DigitalOcean, Vultr, and Linode. Times shown in your local timezone (12-hour).</p>
+
+    <section class="card logs-section" id="logs-section" aria-labelledby="logs-title">
+      <div class="logs-head">
+        <h2 id="logs-title">Operation log</h2>
+        <button type="button" class="ghost" id="logs-refresh">Refresh</button>
+      </div>
+      <div class="logs-wrap hidden" id="logs-wrap">
+        <table class="logs-table">
+          <thead>
+            <tr>
+              <th>Date / time</th>
+              <th>Upstream</th>
+              <th>Operation</th>
+              <th>Provider</th>
+            </tr>
+          </thead>
+          <tbody id="logs-body"></tbody>
+        </table>
+      </div>
+      <p class="logs-empty" id="logs-empty">No operations logged yet.</p>
+    </section>
+    </div>
 
     <p class="footer">
-      Cloud Power Cycle · <strong id="app-version">v…</strong><br />
+      Dropkick · <strong id="app-version">v…</strong><br />
       <span id="session-note"></span>
     </p>
   </main>
@@ -366,7 +626,7 @@
       digitalocean: {
         label: "DigitalOcean",
         kickerClass: "do",
-        title: "Droplet control",
+        title: "Server control",
         panelTitle: "Current droplet",
         listPath: () => "/api/droplets",
         searchPath: (q) => "/api/droplets?q=" + encodeURIComponent(q),
@@ -398,6 +658,24 @@
         parseList: (data) => data.instances || [],
         metaIndexing: "indexing Vultr",
       },
+      linode: {
+        label: "Linode",
+        kickerClass: "linode",
+        title: "Linode control",
+        panelTitle: "Current Linode",
+        listPath: () => "/api/linode/instances",
+        searchPath: (q) => "/api/linode/instances?q=" + encodeURIComponent(q),
+        instancePath: (ip) => "/api/linode/instance?ip=" + encodeURIComponent(ip),
+        refreshPath: () => "/api/linode/refresh",
+        actionPath: () => "/api/linode/action",
+        statusPath: (ctx) =>
+          "/api/linode/action-status?instance_id=" + encodeURIComponent(ctx.resourceId) +
+          "&action=" + encodeURIComponent(ctx.action) +
+          "&started_at=" + encodeURIComponent(ctx.startedAt) + "&t=" + Date.now(),
+        parseInstance: (data) => data.instance,
+        parseList: (data) => data.instances || [],
+        metaIndexing: "indexing Linode",
+      },
     };
 
     const ipInput = document.getElementById("ip");
@@ -419,8 +697,14 @@
     const modalCancel = document.getElementById("modal-cancel");
     const modalConfirm = document.getElementById("modal-confirm");
     const sessionNote = document.getElementById("session-note");
+    const logsWrap = document.getElementById("logs-wrap");
+    const logsBody = document.getElementById("logs-body");
+    const logsEmpty = document.getElementById("logs-empty");
+    const logsRefreshBtn = document.getElementById("logs-refresh");
+    const controlView = document.getElementById("control-view");
+    const logsView = document.getElementById("logs-view");
     const actionBtns = Array.from(document.querySelectorAll("[data-action]"));
-    const tabBtns = Array.from(document.querySelectorAll(".tab"));
+    const tabBtns = Array.from(document.querySelectorAll(".tab[data-tab]"));
 
     const ACTION_COPY = {
       power_cycle: { verb: "power cycle", doing: "Power cycling", done: "power cycle completed", title: "Power cycle server?" },
@@ -429,7 +713,8 @@
     };
 
     let provider = "digitalocean";
-    let enabled = { digitalocean: true, vultr: true };
+    let activeTab = "digitalocean";
+    let enabled = { digitalocean: true, vultr: true, linode: false };
     let servers = [];
     let pollTimer = null;
     let suggestTimer = null;
@@ -440,6 +725,23 @@
 
     function cfg() {
       return PROVIDERS[provider];
+    }
+
+    function isInstanceProvider() {
+      return provider === "vultr" || provider === "linode";
+    }
+
+    function providerBtnClass() {
+      if (provider === "vultr") return " vultr";
+      if (provider === "linode") return " linode";
+      return "";
+    }
+
+    function firstEnabledProvider() {
+      if (enabled.digitalocean) return "digitalocean";
+      if (enabled.vultr) return "vultr";
+      if (enabled.linode) return "linode";
+      return "digitalocean";
     }
 
     function initSession() {
@@ -504,7 +806,14 @@
       cycleBtn.textContent = on && label ? label : "Power cycle";
       refreshBtn.disabled = on;
       ipInput.disabled = on;
-      tabBtns.forEach((btn) => { btn.disabled = on || !enabled[btn.dataset.provider]; });
+      tabBtns.forEach((btn) => {
+        const tab = btn.dataset.tab;
+        if (tab === "logs") {
+          btn.disabled = false;
+          return;
+        }
+        btn.disabled = on || !enabled[btn.dataset.provider];
+      });
     }
 
     function showPanelLoading(message) {
@@ -541,15 +850,127 @@
       });
     }
 
+    function formatLogTime(iso) {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "—";
+      return d.toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
+    }
+
+    function operationPill(operation) {
+      const op = String(operation || "").toLowerCase();
+      let cls = "power";
+      if (op === "stop") cls = "stop";
+      else if (op === "start") cls = "start";
+      return '<span class="op-pill ' + cls + '">' + esc(operation || "—") + "</span>";
+    }
+
+    function providerTag(name) {
+      const n = String(name || "").toLowerCase();
+      let cls = "do";
+      if (n.includes("vultr")) cls = "vultr";
+      else if (n.includes("linode")) cls = "linode";
+      return '<span class="provider-tag ' + cls + '">' + esc(name || "—") + "</span>";
+    }
+
+    function renderLogs(logs) {
+      if (!logs || !logs.length) {
+        logsWrap.classList.add("hidden");
+        logsEmpty.classList.remove("hidden");
+        logsBody.innerHTML = "";
+        return;
+      }
+      logsEmpty.classList.add("hidden");
+      logsWrap.classList.remove("hidden");
+      logsBody.innerHTML = logs.map((row) => {
+        const upstream = esc(row.upstream || "—");
+        const ipLine = row.ip ? '<small>' + esc(row.ip) + "</small>" : "";
+        return (
+          "<tr>" +
+            '<td class="col-time">' + esc(formatLogTime(row.at)) + "</td>" +
+            '<td class="col-upstream">' + upstream + ipLine + "</td>" +
+            "<td>" + operationPill(row.operation) + "</td>" +
+            "<td>" + providerTag(row.provider) + "</td>" +
+          "</tr>"
+        );
+      }).join("");
+    }
+
+    async function loadLogs() {
+      try {
+        const res = await fetch("/api/logs?limit=100", { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load logs");
+        renderLogs(data.logs || []);
+      } catch (err) {
+        logsWrap.classList.add("hidden");
+        logsEmpty.classList.remove("hidden");
+        logsEmpty.textContent = "Could not load operation log: " + err.message;
+      }
+    }
+
+    logsRefreshBtn.addEventListener("click", () => loadLogs());
+
+    function esc(text) {
+      return String(text == null ? "" : text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function formatMemory(mb) {
+      if (mb == null || mb === "") return "—";
+      const n = Number(mb);
+      if (!Number.isFinite(n) || n <= 0) return "—";
+      if (n >= 1024) {
+        const gb = n / 1024;
+        return (gb % 1 === 0 ? gb.toFixed(0) : gb.toFixed(1)) + " GB";
+      }
+      return n + " MB";
+    }
+
+    function formatDisk(gb) {
+      if (gb == null || gb === "") return "—";
+      const n = Number(gb);
+      if (!Number.isFinite(n) || n <= 0) return "—";
+      return n + " GB";
+    }
+
+    function formatVcpus(n) {
+      if (n == null || n === "") return "—";
+      const v = Number(n);
+      if (!Number.isFinite(v) || v <= 0) return "—";
+      return v + (v === 1 ? " vCPU" : " vCPUs");
+    }
+
+    function displayName(d) {
+      return d.name || d.label || d.hostname || d.id || "—";
+    }
+
     function statusPill(d) {
-      const p = provider === "vultr"
+      const p = isInstanceProvider()
         ? (d.power_status || d.status || "unknown")
         : (d.status || "unknown");
       const cls =
         p === "active" || p === "running" ? "active running"
         : p === "off" || p === "stopped" ? "off stopped"
         : "new";
-      return '<span class="pill ' + cls + '">' + p + "</span>";
+      return '<span class="pill ' + cls + '">' + esc(p) + "</span>";
+    }
+
+    function resourceChip(label, value) {
+      return (
+        '<div class="resource-chip"><span>' + esc(label) +
+        '</span><strong>' + esc(value) + "</strong></div>"
+      );
     }
 
     function renderServer(d) {
@@ -560,20 +981,51 @@
         facts.innerHTML = "";
         return;
       }
-      facts.innerHTML =
-        fact("Name", d.name) +
-        fact("Status", statusPill(d), true) +
-        (provider === "vultr" && d.server_status ? fact("Server", d.server_status) : "") +
-        fact("IP", '<span class="chip">' + (d.ip || "—") + "</span>", true) +
-        fact("ID", d.id) +
-        fact("Region", d.region || "—") +
-        fact("Size", d.size || "—");
+
+      const name = displayName(d);
+      const hostname = d.hostname && d.hostname !== name ? d.hostname : "";
+      const label = d.label && d.label !== name && d.label !== hostname ? d.label : "";
+      let subline = "";
+      if (hostname) subline = esc(hostname);
+      else if (label) subline = esc(label);
+
+      const hasResources = d.vcpus != null || d.memory != null || d.disk != null;
+      let html =
+        '<div class="server-head">' +
+          '<div class="server-head-main"><div class="server-name">' + esc(name) + "</div>" +
+          (subline ? '<div class="server-subname">' + subline + "</div>" : "") +
+          "</div>" +
+          '<div class="server-head-meta">' + statusPill(d) + "</div>" +
+        "</div>";
+
+      if (hasResources) {
+        html +=
+          '<div class="resource-row">' +
+            resourceChip("CPU", formatVcpus(d.vcpus)) +
+            resourceChip("Memory", formatMemory(d.memory)) +
+            resourceChip("Disk", formatDisk(d.disk)) +
+          "</div>" +
+          '<p class="resource-note">Plan allocation from ' + esc(cfg().label) +
+          " — live utilization is not exposed by the provider API.</p>";
+      }
+
+      html +=
+        '<div class="facts">' +
+          fact("Public IP", '<span class="chip">' + esc(d.ip || "—") + "</span>", true) +
+          fact("Region", d.region || "—") +
+          fact("Plan", d.size || "—") +
+          (isInstanceProvider() && d.server_status ? fact("Server health", d.server_status) : "") +
+          (isInstanceProvider() && d.status && d.power_status ? fact("Instance status", d.status) : "") +
+          fact("Instance ID", d.id, false, true) +
+        "</div>";
+
+      facts.innerHTML = html;
     }
 
-    function fact(label, value, html) {
+    function fact(label, value, html, wide) {
       return (
-        '<div class="fact"><span>' + label + "</span><strong>" +
-        (html ? value : String(value == null ? "—" : value)) +
+        '<div class="fact' + (wide ? " fact-wide" : "") + '"><span>' + esc(label) + "</span><strong>" +
+        (html ? value : esc(value == null ? "—" : value)) +
         "</strong></div>"
       );
     }
@@ -583,10 +1035,41 @@
       document.getElementById("kicker").textContent = c.label;
       document.getElementById("kicker").className = "kicker " + c.kickerClass;
       document.getElementById("title").textContent = c.title;
-      cycleBtn.classList.toggle("vultr", provider === "vultr");
+      document.getElementById("subtitle").textContent =
+        "Look up a server by public IPv4, then power cycle, stop, or start it.";
+      cycleBtn.className = "primary" + providerBtnClass();
+      updateTabUi();
+    }
+
+    function applyLogsUi() {
+      document.getElementById("kicker").textContent = "History";
+      document.getElementById("kicker").className = "kicker";
+      document.getElementById("title").textContent = "Operation log";
+      document.getElementById("subtitle").textContent =
+        "Power cycle, stop, and start actions across DigitalOcean, Vultr, and Linode. Times shown in your local timezone (12-hour).";
+      updateTabUi();
+    }
+
+    function updateTabUi() {
       tabBtns.forEach((btn) => {
-        btn.classList.toggle("active", btn.dataset.provider === provider);
+        btn.classList.toggle("active", btn.dataset.tab === activeTab);
       });
+    }
+
+    function showLogsView() {
+      activeTab = "logs";
+      controlView.classList.add("hidden");
+      logsView.classList.remove("hidden");
+      applyLogsUi();
+      loadLogs().catch(() => {});
+    }
+
+    function showControlView(nextProvider) {
+      activeTab = nextProvider;
+      provider = nextProvider;
+      controlView.classList.remove("hidden");
+      logsView.classList.add("hidden");
+      applyProviderUi();
     }
 
     function confirmAction(opts) {
@@ -598,7 +1081,7 @@
         modalBody.innerHTML = opts.html || "";
         modalSkip.checked = false;
         modalConfirm.textContent = opts.confirmLabel || "Confirm";
-        modalConfirm.className = "primary" + (opts.danger ? " danger" : provider === "vultr" ? " vultr" : "");
+        modalConfirm.className = "primary" + (opts.danger ? " danger" : providerBtnClass());
         modalBackdrop.classList.add("show");
         modalBackdrop.setAttribute("aria-hidden", "false");
         document.body.classList.add("modal-open");
@@ -691,7 +1174,7 @@
 
     function actionSettled(kind, data, startedAt) {
       const status = String(data.status || "").toLowerCase().replace(/_/g, "-");
-      if (provider === "vultr") {
+      if (isInstanceProvider()) {
         if (status === "completed") return "completed";
         if (Date.now() - startedAt > 180000) return "timeout";
         return null;
@@ -705,7 +1188,7 @@
     }
 
     function resourceStatusLine(data) {
-      if (provider === "vultr") {
+      if (isInstanceProvider()) {
         return "power: " + (data.power_status || "?") + " · server: " + (data.server_status || "?");
       }
       return "droplet: " + (data.droplet_status || "?");
@@ -726,6 +1209,7 @@
           setLoading(false);
           showStatus("ok", name + " (" + ip + ") " + copy.done + ".\n" + resourceStatusLine(data));
           loadServerCard(ip).catch(() => {});
+          loadLogs().catch(() => {});
           return;
         }
         if (settled === "errored") {
@@ -808,6 +1292,7 @@
         const resourceId = data.droplet_id || data.instance_id;
         const actionId = data.action_id || resourceId;
         showStatus("info", copy.doing + " " + serverName + " (" + ip + ")…");
+        loadLogs().catch(() => {});
         pollStatus(kind, { actionId, resourceId, startedAt }, serverName, ip, startedAt);
       } catch (err) {
         setBusy(false);
@@ -821,14 +1306,13 @@
         showStatus("err", PROVIDERS[next].label + " is not configured on this server.");
         return;
       }
-      provider = next;
+      showControlView(next);
       servers = [];
       renderDatalist();
       renderServer(null);
       clearPoll();
       setBusy(false);
       hideStatus();
-      applyProviderUi();
       loadList()
         .then(() => {
           const ip = currentIp();
@@ -840,8 +1324,17 @@
         });
     }
 
+    function switchTab(tab) {
+      if (tab === "logs") {
+        showLogsView();
+        return;
+      }
+      if (tab === provider && activeTab !== "logs") return;
+      switchProvider(tab);
+    }
+
     tabBtns.forEach((btn) => {
-      btn.addEventListener("click", () => switchProvider(btn.dataset.provider));
+      btn.addEventListener("click", () => switchTab(btn.dataset.tab));
     });
 
     actionBtns.forEach((btn) => {
@@ -885,17 +1378,18 @@
         if (d.providers) {
           enabled = d.providers;
           tabBtns.forEach((btn) => {
-            btn.disabled = !enabled[btn.dataset.provider];
+            const p = btn.dataset.provider;
+            if (p) btn.disabled = !enabled[p];
           });
           if (!enabled[provider]) {
-            provider = enabled.vultr ? "vultr" : "digitalocean";
+            provider = firstEnabledProvider();
           }
         }
-        applyProviderUi();
+        showControlView(provider);
         return loadList();
       })
       .catch((err) => {
-        document.getElementById("app-version").textContent = "v1.3.0";
+        document.getElementById("app-version").textContent = "v1.6.0";
         meta.textContent = "Could not load list.";
         showStatus("err", err.message);
       });

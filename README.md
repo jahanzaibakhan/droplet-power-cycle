@@ -1,6 +1,6 @@
-# Droplet Power Cycle
+# Dropkick
 
-Dark-mode web app to **power cycle**, **stop**, and **start** DigitalOcean droplets by public IPv4. Uses DigitalOcean’s `power_cycle` action (hard reset), not graceful `reboot`.
+**Dropkick** is a dark-mode web app to **power cycle**, **stop**, and **start** cloud servers by public IPv4 on **DigitalOcean** and **Vultr**.
 
 The API token stays in server `.env` only — never sent to the browser.
 

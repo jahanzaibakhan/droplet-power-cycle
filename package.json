@@ -1,8 +1,8 @@
 {
-  "name": "droplet-power-cycle",
-  "version": "1.3.0",
+  "name": "dropkick",
+  "version": "1.6.0",
   "private": true,
-  "description": "Power cycle, stop, and start DigitalOcean droplets by public IPv4",
+  "description": "Dropkick — power cycle, stop, and start cloud servers on DigitalOcean, Vultr, and Linode by public IPv4",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

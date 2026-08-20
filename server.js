@@ -6,10 +6,13 @@ const path = require("path");
 const express = require("express");
 
 const { createVultrProvider } = require("./providers/vultr");
+const { createLinodeProvider } = require("./providers/linode");
+const operationLogs = require("./lib/operationLogs");
 
 const DO_API = "https://api.digitalocean.com/v2";
 const DO_TOKEN = process.env.DIGITALOCEAN_API_TOKEN;
 const VULTR_TOKEN = process.env.VULTR_API_KEY;
+const LINODE_TOKEN = process.env.LINODE_API_TOKEN;
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -19,14 +22,16 @@ const CACHE_FILE = path.join(__dirname, "data", "droplet-cache.json");
 const LIST_FULL_LIMIT = 400;
 
 const HAS_DO = DO_TOKEN && DO_TOKEN !== "your_token_here";
-const HAS_VULTR = VULTR_TOKEN && VULTR_TOKEN !== "your_token_here";
+const HAS_VULTR = VULTR_TOKEN && VULTR_TOKEN !== "your_vultr_key_here";
+const HAS_LINODE = LINODE_TOKEN && LINODE_TOKEN !== "your_linode_token_here";
 
-if (!HAS_DO && !HAS_VULTR) {
-  console.error("Configure DIGITALOCEAN_API_TOKEN and/or VULTR_API_KEY in .env");
+if (!HAS_DO && !HAS_VULTR && !HAS_LINODE) {
+  console.error("Configure DIGITALOCEAN_API_TOKEN, VULTR_API_KEY, and/or LINODE_API_TOKEN in .env");
   process.exit(1);
 }
 
 const vultr = HAS_VULTR ? createVultrProvider(VULTR_TOKEN) : null;
+const linode = HAS_LINODE ? createLinodeProvider(LINODE_TOKEN) : null;
 
 /** @type {Map<string, { id: number, name: string }>} */
 const ipToDroplet = new Map();
@@ -341,9 +346,11 @@ function normalizeActionStatus(status) {
 function summarizeDroplet(droplet, fallbackIp) {
   const ips = publicIPv4s(droplet);
   const region = droplet.region || {};
+  const name = (droplet.name || "").trim();
   return {
     id: droplet.id,
-    name: droplet.name,
+    name: name || String(droplet.id),
+    hostname: name || null,
     status: droplet.status,
     region: region.slug || region.name || null,
     size: droplet.size_slug || null,
@@ -389,7 +396,7 @@ app.get("/api/version", (_req, res) => {
   res.json({
     version: pkg.version,
     name: pkg.name,
-    providers: { digitalocean: HAS_DO, vultr: HAS_VULTR },
+    providers: { digitalocean: HAS_DO, vultr: HAS_VULTR, linode: HAS_LINODE },
   });
 });
 
@@ -407,6 +414,7 @@ app.get("/api/health", (_req, res) => {
           }
         : null,
       vultr: vultr ? vultr.health() : null,
+      linode: linode ? linode.health() : null,
     },
   });
 });
@@ -505,6 +513,14 @@ async function runDropletAction(req, res, next, requested) {
       actionToDroplet.set(String(actionId), droplet.id);
     }
 
+    const dropletName = live && live.name ? live.name : droplet.name;
+    operationLogs.appendLog({
+      provider: "digitalocean",
+      upstream: dropletName,
+      ip,
+      operation: key,
+    });
+
     res.json({
       ok: true,
       action: key,
@@ -513,7 +529,7 @@ async function runDropletAction(req, res, next, requested) {
       action_id: actionId,
       status: normalizeActionStatus(action.status || "in-progress"),
       droplet_id: droplet.id,
-      droplet_name: live && live.name ? live.name : droplet.name,
+      droplet_name: dropletName,
       droplet_status: live && live.status,
       ip,
     });
@@ -521,6 +537,11 @@ async function runDropletAction(req, res, next, requested) {
     next(err);
   }
 }
+
+app.get("/api/logs", (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 100, 500);
+  res.json({ logs: operationLogs.listLogs(limit) });
+});
 
 app.get("/api/droplet", async (req, res, next) => {
   if (!HAS_DO) {
@@ -647,6 +668,12 @@ if (vultr) {
       }
       const action = (req.body && req.body.action) || "power_cycle";
       const result = await vultr.runAction(ip, action);
+      operationLogs.appendLog({
+        provider: "vultr",
+        upstream: result.instance_name,
+        ip: result.ip,
+        operation: result.action,
+      });
       res.json(result);
     } catch (err) {
       next(err);
@@ -663,6 +690,86 @@ if (vultr) {
       }
       const live = await vultr.fetchInstanceById(instanceId);
       res.json(vultr.getActionStatus(action, live, startedAt));
+    } catch (err) {
+      next(err);
+    }
+  });
+}
+
+if (linode) {
+  app.get("/api/linode/instances", async (req, res, next) => {
+    try {
+      const q = String(req.query.q || "").trim();
+      if (q && IPV4.test(q)) {
+        const found = await linode.resolveByIp(q);
+        if (found) {
+          return res.json({
+            ...linode.listResponse(""),
+            instances: [{ ip: q, id: found.id, name: found.name }],
+          });
+        }
+      }
+      res.json(linode.listResponse(q));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post("/api/linode/refresh", (_req, res) => {
+    linode.refreshCache().catch(() => {});
+    res.json({ ok: true, started: true, ...linode.health() });
+  });
+
+  app.get("/api/linode/instance", async (req, res, next) => {
+    try {
+      const ip = parseIp(req.query.ip);
+      if (!ip || !IPV4.test(ip)) {
+        return res.status(400).json({ error: "Pass a valid ?ip= public IPv4 address." });
+      }
+      const found = await linode.resolveByIp(ip);
+      if (!found) {
+        return res.status(404).json({ error: `No Linode found with public IPv4 ${ip}.` });
+      }
+      const live = await linode.fetchInstanceById(found.id);
+      res.json({ instance: linode.summarize(live, ip) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post("/api/linode/action", async (req, res, next) => {
+    try {
+      const ip = parseIp(req.body && req.body.ip);
+      if (!ip) {
+        return res.status(400).json({ error: "Missing ip. Send JSON { \"ip\": \"x.x.x.x\" }." });
+      }
+      if (!IPV4.test(ip)) {
+        return res.status(400).json({ error: `"${ip}" is not a valid IPv4 address.` });
+      }
+      const action = (req.body && req.body.action) || "power_cycle";
+      const result = await linode.runAction(ip, action);
+      operationLogs.appendLog({
+        provider: "linode",
+        upstream: result.instance_name,
+        ip: result.ip,
+        operation: result.action,
+      });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get("/api/linode/action-status", async (req, res, next) => {
+    try {
+      const instanceId = String(req.query.instance_id || "").trim();
+      const action = String(req.query.action || "power_cycle").toLowerCase();
+      const startedAt = Number(req.query.started_at) || Date.now() - 10000;
+      if (!instanceId) {
+        return res.status(400).json({ error: "Missing instance_id query parameter." });
+      }
+      const live = await linode.fetchInstanceById(instanceId);
+      res.json(linode.getActionStatus(action, live, startedAt));
     } catch (err) {
       next(err);
     }
@@ -694,10 +801,11 @@ app.use((err, _req, res, _next) => {
 async function start() {
   if (HAS_DO) loadDiskCache();
   if (vultr) vultr.loadDiskCache();
+  if (linode) linode.loadDiskCache();
 
   app.listen(PORT, HOST, () => {
-    console.log(`Cloud control app listening on http://${HOST}:${PORT}`);
-    console.log(`Providers: DO=${HAS_DO} Vultr=${HAS_VULTR}`);
+    console.log(`Dropkick listening on http://${HOST}:${PORT}`);
+    console.log(`Providers: DO=${HAS_DO} Vultr=${HAS_VULTR} Linode=${HAS_LINODE}`);
   });
 
   if (HAS_DO) {
@@ -710,6 +818,7 @@ async function start() {
   }
 
   if (vultr) vultr.startBackgroundRefresh();
+  if (linode) linode.startBackgroundRefresh();
 }
 
 start();
