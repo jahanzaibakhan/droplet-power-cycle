@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script>
+    (function () {
+      var t = localStorage.getItem("dk_theme");
+      if (t !== "light" && t !== "dark") t = "dark";
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in — Dropkick</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root { --font-sans: "Inter", system-ui, sans-serif; --font-mono: "JetBrains Mono", ui-monospace, monospace; }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0b0c0e; --bg-elev: #14161a; --card: #1a1d23; --text: #e8eaed; --muted: #9aa3af;
+      --line: #2a2f38; --accent: #4d8dff; --danger: #ff6b6b; --danger-bg: #3a1518;
+      --brand-gradient: linear-gradient(135deg, #f0f3f8 0%, #9ec1ff 55%, #51b9ff 100%);
+      --footer-bg: #0f1218; --footer-border: #252a33; --footer-text: #8b95a5; --footer-strong: #c5ceda;
+    }
+    html[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f3f5f8; --bg-elev: #fff; --card: #fff; --text: #0f172a; --muted: #64748b;
+      --line: #e2e8f0; --accent: #2563eb; --danger: #dc2626; --danger-bg: #fef2f2;
+      --brand-gradient: linear-gradient(135deg, #0f172a 0%, #2563eb 50%, #0891b2 100%);
+      --footer-bg: #e8ecf2; --footer-border: #d4dce8; --footer-text: #64748b; --footer-strong: #475569;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+      font-family: var(--font-sans); color: var(--text);
+      background: radial-gradient(900px 400px at 15% -5%, rgba(77,141,255,.12), transparent 55%), var(--bg);
+    }
+    main {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: 2rem 1.25rem;
+    }
+    .login-card {
+      width: min(100%, 24rem);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 1.75rem 1.5rem 1.5rem;
+      box-shadow: 0 20px 50px rgba(0,0,0,.18);
+    }
+    .brand-row { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.25rem; }
+    .brand-name {
+      font-size: 1.35rem; font-weight: 800; letter-spacing: -.03em;
+      background: var(--brand-gradient); -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    h1 { margin: 0 0 .35rem; font-size: 1.15rem; }
+    .sub { margin: 0 0 1.25rem; color: var(--muted); font-size: .88rem; line-height: 1.45; }
+    label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); margin-bottom: .35rem; }
+    input {
+      width: 100%; border: 1px solid var(--line); background: var(--bg-elev); color: var(--text);
+      border-radius: 10px; padding: .65rem .75rem; font-size: .95rem; margin-bottom: .85rem;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button.primary {
+      width: 100%; border: none; border-radius: 10px; padding: .72rem 1rem;
+      background: var(--accent); color: #071018; font-weight: 700; cursor: pointer; font-size: .92rem;
+    }
+    button.primary:disabled { opacity: .6; cursor: not-allowed; }
+    .err {
+      display: none; margin-bottom: .85rem; padding: .65rem .75rem; border-radius: 10px;
+      background: var(--danger-bg); color: var(--danger); font-size: .84rem;
+    }
+    .err.show { display: block; }
+    .top-actions { position: absolute; top: 1rem; right: 1rem; }
+    .ghost {
+      border: 1px solid var(--line); background: var(--bg-elev); color: var(--muted);
+      border-radius: 10px; padding: .45rem .75rem; font-size: .78rem; cursor: pointer;
+    }
+    .site-footer {
+      background: var(--footer-bg); border-top: 1px solid var(--footer-border);
+      text-align: center; padding: .9rem; color: var(--footer-text); font-size: .75rem;
+      font-family: var(--font-mono);
+    }
+    .site-footer strong { color: var(--footer-strong); }
+  </style>
+</head>
+<body>
+  <div class="top-actions">
+    <button type="button" class="ghost" id="theme-toggle">Theme</button>
+  </div>
+  <main>
+    <div class="login-card">
+      <div class="brand-row">
+        <img src="/logo.svg" width="40" height="40" alt="" />
+        <span class="brand-name">Dropkick</span>
+      </div>
+      <h1>Sign in</h1>
+      <p class="sub">Power cycle, stop, and start cloud servers on DigitalOcean, Vultr, and Linode.</p>
+      <div class="err" id="err" role="alert"></div>
+      <form id="login-form">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required />
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+        <button class="primary" type="submit" id="submit-btn">Sign in</button>
+      </form>
+    </div>
+  </main>
+  <footer class="site-footer">Dropkick · <strong id="app-version">v…</strong></footer>
+  <script>
+    const THEME_KEY = "dk_theme";
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+      const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+      document.documentElement.setAttribute("data-theme", next);
+      try { localStorage.setItem(THEME_KEY, next); } catch (_) {}
+    });
+    fetch("/api/version", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { document.getElementById("app-version").textContent = "v" + (d.version || "?"); })
+      .catch(() => {});
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => { if (r.ok) window.location.replace("/"); })
+      .catch(() => {});
+    const form = document.getElementById("login-form");
+    const errEl = document.getElementById("err");
+    const submitBtn = document.getElementById("submit-btn");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errEl.classList.remove("show");
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Signing in…";
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({
+            username: document.getElementById("username").value.trim(),
+            password: document.getElementById("password").value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Login failed");
+        window.location.replace("/");
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.classList.add("show");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Sign in";
+      }
+    });
+  </script>
+</body>
+</html>

@@ -8,6 +8,12 @@ const express = require("express");
 const { createVultrProvider } = require("./providers/vultr");
 const { createLinodeProvider } = require("./providers/linode");
 const operationLogs = require("./lib/operationLogs");
+const db = require("./lib/db");
+const { attachUser, requireAuth } = require("./middleware/auth");
+const authRoutes = require("./routes/auth");
+const adminRoutes = require("./routes/admin");
+const profileRoutes = require("./routes/profile");
+const sessions = require("./lib/sessions");
 
 const DO_API = "https://api.digitalocean.com/v2";
 const DO_TOKEN = process.env.DIGITALOCEAN_API_TOKEN;
@@ -369,6 +375,8 @@ async function fetchDropletById(id) {
 
 const app = express();
 app.disable("x-powered-by");
+app.set("trust proxy", 1);
+app.use(require("cookie-parser")());
 app.use(express.json({ limit: "32kb" }));
 
 app.use((_req, res, next) => {
@@ -391,6 +399,23 @@ app.use((req, res, next) => {
 });
 
 const pkg = require("./package.json");
+
+function opUser(req) {
+  if (!req.user) return {};
+  return { userId: req.user.id, username: req.user.username };
+}
+
+app.use(attachUser);
+
+app.use("/api/auth", authRoutes);
+app.use("/api/profile", profileRoutes);
+app.use("/api/admin", adminRoutes);
+
+app.use("/api", (req, res, next) => {
+  if (req.path === "/version") return next();
+  if (req.path === "/auth/login" && req.method === "POST") return next();
+  return requireAuth(req, res, next);
+});
 
 app.get("/api/version", (_req, res) => {
   res.json({
@@ -519,6 +544,7 @@ async function runDropletAction(req, res, next, requested) {
       upstream: dropletName,
       ip,
       operation: key,
+      ...opUser(req),
     });
 
     res.json({
@@ -538,9 +564,20 @@ async function runDropletAction(req, res, next, requested) {
   }
 }
 
-app.get("/api/logs", (req, res) => {
-  const limit = Math.min(Number(req.query.limit) || 100, 500);
-  res.json({ logs: operationLogs.listLogs(limit) });
+app.get("/api/logs", async (req, res, next) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    let userId;
+    if (req.user.role === "admin" && req.query.user_id) {
+      userId = Number(req.query.user_id);
+    } else if (req.user.role !== "admin") {
+      userId = req.user.id;
+    }
+    const logs = await operationLogs.listLogs(limit, { userId: userId || undefined });
+    res.json({ logs });
+  } catch (err) {
+    next(err);
+  }
 });
 
 app.get("/api/droplet", async (req, res, next) => {
@@ -673,6 +710,7 @@ if (vultr) {
         upstream: result.instance_name,
         ip: result.ip,
         operation: result.action,
+        ...opUser(req),
       });
       res.json(result);
     } catch (err) {
@@ -753,6 +791,7 @@ if (linode) {
         upstream: result.instance_name,
         ip: result.ip,
         operation: result.action,
+        ...opUser(req),
       });
       res.json(result);
     } catch (err) {
@@ -785,8 +824,15 @@ app.use(
   })
 );
 
-app.get("/", (_req, res) => {
+app.get("/", (req, res) => {
+  if (!req.user) {
+    return res.sendFile(path.join(__dirname, "public", "login.html"));
+  }
   res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+app.get("/app", (_req, res) => {
+  res.redirect("/");
 });
 
 app.use((err, _req, res, _next) => {
@@ -799,6 +845,22 @@ app.use((err, _req, res, _next) => {
 });
 
 async function start() {
+  if (!db.isConfigured()) {
+    console.error("Database not configured. Set DB_HOST, DB_USER, DB_PASSWORD, DB_NAME in .env");
+    process.exit(1);
+  }
+
+  try {
+    await db.ping();
+    console.log("MySQL connected.");
+  } catch (err) {
+    console.error("MySQL connection failed:", err.message);
+    process.exit(1);
+  }
+
+  await sessions.cleanupExpired();
+  setInterval(() => sessions.cleanupExpired().catch(() => {}), 60 * 60 * 1000).unref();
+
   if (HAS_DO) loadDiskCache();
   if (vultr) vultr.loadDiskCache();
   if (linode) linode.loadDiskCache();

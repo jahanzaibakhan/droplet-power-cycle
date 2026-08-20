@@ -755,6 +755,102 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.45; }
     }
+    .brand-right {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .user-chip {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      padding: 0.35rem 0.55rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-elev);
+      max-width: 12rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .user-chip.admin { border-color: var(--accent); color: var(--accent); }
+    .tab.admin-tab { color: var(--logs-tab); }
+    .tab.admin-tab.active { background: var(--logs-tab); color: #fff; border-color: var(--logs-tab); }
+    .admin-grid { display: grid; gap: 1rem; }
+    @media (min-width: 900px) {
+      .admin-grid { grid-template-columns: 1fr 1fr; }
+    }
+    .admin-form .field-row { display: grid; gap: 0.65rem; margin-bottom: 0.85rem; }
+    .admin-form input, .admin-form select {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 0.55rem 0.7rem;
+      font-size: 0.88rem;
+    }
+    .admin-users-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .admin-users-table th, .admin-users-table td {
+      text-align: left;
+      padding: 0.55rem 0.45rem;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    .admin-users-table th { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .role-pill, .state-pill {
+      display: inline-block;
+      padding: 0.15rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .role-pill.admin { background: var(--info-bg); color: var(--info); }
+    .role-pill.user { background: var(--chip); color: var(--chip-text); }
+    .state-pill.on { background: var(--ok-bg); color: var(--ok); }
+    .state-pill.off { background: var(--danger-bg); color: var(--danger); }
+    .mini-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .mini-actions button {
+      border: 1px solid var(--line);
+      background: var(--ghost-bg);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0.25rem 0.45rem;
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+    .activity-list { max-height: 28rem; overflow: auto; font-size: 0.8rem; }
+    .activity-item {
+      padding: 0.55rem 0;
+      border-bottom: 1px solid var(--line);
+      line-height: 1.4;
+    }
+    .activity-item time { display: block; color: var(--muted); font-size: 0.72rem; font-family: var(--font-mono); }
+    .profile-field { margin-bottom: 0.85rem; }
+    .profile-field label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 0.3rem; }
+    .profile-field input {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 0.55rem 0.7rem;
+    }
+    .logs-filter { margin-bottom: 0.85rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .logs-filter select {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 0.4rem 0.6rem;
+      font-size: 0.82rem;
+    }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -767,12 +863,17 @@
           <span class="brand-tag">Power cycle · stop · start cloud servers</span>
         </div>
       </div>
-      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light mode">
+      <div class="brand-right">
+        <span class="user-chip" id="user-chip" title=""></span>
+        <button type="button" class="ghost" id="profile-btn">Profile</button>
+        <button type="button" class="ghost" id="logout-btn">Logout</button>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light mode">
         <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
         </svg>
         <span id="theme-label">Light</span>
       </button>
+      </div>
     </header>
 
     <div class="tabs" id="tabs">
@@ -780,6 +881,7 @@
       <button type="button" class="tab" data-tab="vultr" data-provider="vultr">Vultr</button>
       <button type="button" class="tab" data-tab="linode" data-provider="linode">Linode</button>
       <button type="button" class="tab" data-tab="logs">Operation log</button>
+      <button type="button" class="tab admin-tab hidden" data-tab="admin" id="admin-tab">Admin</button>
     </div>
 
     <div id="control-view" class="view-panel">
@@ -825,11 +927,18 @@
         <h2 id="logs-title">Operation log</h2>
         <button type="button" class="ghost" id="logs-refresh">Refresh</button>
       </div>
+      <div class="logs-filter hidden" id="logs-filter">
+        <label for="logs-user-filter">User</label>
+        <select id="logs-user-filter">
+          <option value="">All users</option>
+        </select>
+      </div>
       <div class="logs-wrap hidden" id="logs-wrap">
         <table class="logs-table">
           <thead>
             <tr>
               <th>Date / time</th>
+              <th>User</th>
               <th>Upstream</th>
               <th>Operation</th>
               <th>Provider</th>
@@ -839,6 +948,61 @@
         </table>
       </div>
       <p class="logs-empty" id="logs-empty">No operations logged yet.</p>
+    </section>
+    </div>
+
+    <div id="admin-view" class="view-panel hidden">
+    <p class="kicker">Administration</p>
+    <h1>Users &amp; activity</h1>
+    <p class="sub">Manage team accounts and review sign-in and server action history.</p>
+
+    <div class="admin-grid">
+      <section class="card">
+        <h2>Create user</h2>
+        <form class="admin-form" id="create-user-form">
+          <div class="field-row">
+            <input id="new-username" placeholder="Username" required />
+            <input id="new-email" type="email" placeholder="Email" required />
+            <input id="new-password" type="password" placeholder="Password (min 8 chars)" required />
+            <select id="new-role">
+              <option value="user">Operator</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <button type="submit" class="primary">Create user</button>
+        </form>
+        <div class="status" id="create-user-status"></div>
+      </section>
+
+      <section class="card">
+        <div class="logs-head">
+          <h2>Recent activity</h2>
+          <button type="button" class="ghost" id="activity-refresh">Refresh</button>
+        </div>
+        <div class="activity-list" id="activity-list"></div>
+      </section>
+    </div>
+
+    <section class="card logs-section" style="margin-top:1rem">
+      <div class="logs-head">
+        <h2>All users</h2>
+        <button type="button" class="ghost" id="users-refresh">Refresh</button>
+      </div>
+      <div style="overflow:auto">
+        <table class="admin-users-table">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Last login</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="admin-users-body"></tbody>
+        </table>
+      </div>
     </section>
     </div>
 
@@ -864,6 +1028,34 @@
       <div class="modal-actions">
         <button type="button" class="ghost" id="modal-cancel">Cancel</button>
         <button type="button" class="primary" id="modal-confirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="profile-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+      <h3 id="profile-title">Profile</h3>
+      <div class="profile-field">
+        <label for="profile-username">Username</label>
+        <input id="profile-username" autocomplete="username" />
+      </div>
+      <div class="profile-field">
+        <label for="profile-email">Email</label>
+        <input id="profile-email" type="email" autocomplete="email" />
+      </div>
+      <hr style="border:none;border-top:1px solid var(--line);margin:1rem 0" />
+      <div class="profile-field">
+        <label for="profile-current">Current password</label>
+        <input id="profile-current" type="password" autocomplete="current-password" />
+      </div>
+      <div class="profile-field">
+        <label for="profile-new">New password</label>
+        <input id="profile-new" type="password" autocomplete="new-password" />
+      </div>
+      <div class="status" id="profile-status"></div>
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="profile-cancel">Cancel</button>
+        <button type="button" class="primary" id="profile-save">Save changes</button>
       </div>
     </div>
   </div>
@@ -991,9 +1183,14 @@
     const logsRefreshBtn = document.getElementById("logs-refresh");
     const controlView = document.getElementById("control-view");
     const logsView = document.getElementById("logs-view");
+    const adminView = document.getElementById("admin-view");
     const toastStack = document.getElementById("toast-stack");
     const actionBtns = Array.from(document.querySelectorAll("[data-action]"));
     const tabBtns = Array.from(document.querySelectorAll(".tab[data-tab]"));
+    const logsUserFilter = document.getElementById("logs-user-filter");
+    const logsFilterWrap = document.getElementById("logs-filter");
+
+    let currentUser = null;
 
     const ACTION_COPY = {
       power_cycle: { verb: "power cycle", doing: "Power cycling", done: "Power cycle completed", title: "Power cycle server?" },
@@ -1026,6 +1223,37 @@
       vultr: createProviderSession(),
       linode: createProviderSession(),
     };
+
+    function hideAllViews() {
+      controlView.classList.add("hidden");
+      logsView.classList.add("hidden");
+      adminView.classList.add("hidden");
+    }
+
+    function applyUserUi() {
+      if (!currentUser) return;
+      const chip = document.getElementById("user-chip");
+      chip.textContent = currentUser.username;
+      chip.title = currentUser.email + " · " + currentUser.role;
+      chip.classList.toggle("admin", currentUser.role === "admin");
+      const adminTabEl = document.getElementById("admin-tab");
+      if (currentUser.role === "admin") {
+        adminTabEl.classList.remove("hidden");
+        logsFilterWrap.classList.remove("hidden");
+      } else {
+        adminTabEl.classList.add("hidden");
+        logsFilterWrap.classList.add("hidden");
+      }
+    }
+
+    async function authFetch(url, options) {
+      const res = await fetch(url, options || { cache: "no-store" });
+      if (res.status === 401) {
+        window.location.replace("/");
+        throw new Error("Session expired");
+      }
+      return res;
+    }
 
     function cfg() {
       return PROVIDERS[provider];
@@ -1148,7 +1376,7 @@
       ipInput.disabled = isBusy;
       tabBtns.forEach((btn) => {
         const tab = btn.dataset.tab;
-        if (tab === "logs") {
+        if (tab === "logs" || tab === "admin") {
           btn.disabled = false;
           return;
         }
@@ -1313,6 +1541,7 @@
         return (
           "<tr>" +
             '<td class="col-time">' + esc(formatLogTime(row.at)) + "</td>" +
+            '<td class="col-user">' + esc(row.username || "—") + "</td>" +
             '<td class="col-upstream">' + upstream + ipLine + "</td>" +
             "<td>" + operationPill(row.operation) + "</td>" +
             "<td>" + providerTag(row.provider) + "</td>" +
@@ -1323,18 +1552,228 @@
 
     async function loadLogs() {
       try {
-        const res = await fetch("/api/logs?limit=100", { cache: "no-store" });
+        let url = "/api/logs?limit=100";
+        if (currentUser && currentUser.role === "admin" && logsUserFilter && logsUserFilter.value) {
+          url += "&user_id=" + encodeURIComponent(logsUserFilter.value);
+        }
+        const res = await authFetch(url);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load logs");
         renderLogs(data.logs || []);
       } catch (err) {
+        if (err.message === "Session expired") return;
         logsWrap.classList.add("hidden");
         logsEmpty.classList.remove("hidden");
         logsEmpty.textContent = "Could not load operation log: " + err.message;
       }
     }
 
+    async function populateLogsUserFilter() {
+      if (!currentUser || currentUser.role !== "admin") return;
+      try {
+        const res = await authFetch("/api/admin/users");
+        const data = await res.json();
+        if (!res.ok) return;
+        const users = data.users || [];
+        logsUserFilter.innerHTML = '<option value="">All users</option>' +
+          users.map((u) => '<option value="' + u.id + '">' + esc(u.username) + "</option>").join("");
+      } catch (_) {}
+    }
+
+    async function loadAdminUsers() {
+      const body = document.getElementById("admin-users-body");
+      const res = await authFetch("/api/admin/users");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load users");
+      body.innerHTML = (data.users || []).map((u) => {
+        const roleCls = u.role === "admin" ? "admin" : "user";
+        const stateCls = u.active ? "on" : "off";
+        return (
+          "<tr>" +
+            "<td>" + esc(u.username) + "</td>" +
+            "<td>" + esc(u.email) + "</td>" +
+            '<td><span class="role-pill ' + roleCls + '">' + esc(u.role) + "</span></td>" +
+            '<td><span class="state-pill ' + stateCls + '">' + (u.active ? "active" : "disabled") + "</span></td>" +
+            '<td class="col-time">' + esc(formatLogTime(u.last_login_at)) + "</td>" +
+            '<td><div class="mini-actions">' +
+              '<button type="button" data-user-edit="' + u.id + '">Edit</button>' +
+              '<button type="button" data-user-pass="' + u.id + '">Password</button>' +
+              '<button type="button" data-user-toggle="' + u.id + '" data-active="' + (u.active ? "1" : "0") + '">' +
+                (u.active ? "Disable" : "Enable") +
+              "</button>" +
+            "</div></td>" +
+          "</tr>"
+        );
+      }).join("");
+    }
+
+    async function loadActivity() {
+      const list = document.getElementById("activity-list");
+      const res = await authFetch("/api/admin/activity?limit=50");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load activity");
+      const logs = data.logs || [];
+      if (!logs.length) {
+        list.innerHTML = '<p class="logs-empty">No activity yet.</p>';
+        return;
+      }
+      list.innerHTML = logs.map((row) =>
+        '<div class="activity-item">' +
+          "<time>" + esc(formatLogTime(row.at)) + "</time>" +
+          "<strong>" + esc(row.username || "—") + "</strong> · " +
+          esc(row.category) + " / " + esc(row.action) +
+          (row.detail ? "<br /><span style=\"color:var(--muted)\">" + esc(row.detail) + "</span>" : "") +
+        "</div>"
+      ).join("");
+    }
+
+    async function adminUpdateUser(id, payload) {
+      const res = await authFetch("/api/admin/users/" + id, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Update failed");
+      return data.user;
+    }
+
     logsRefreshBtn.addEventListener("click", () => loadLogs());
+    if (logsUserFilter) logsUserFilter.addEventListener("change", () => loadLogs());
+
+    document.getElementById("logout-btn").addEventListener("click", async () => {
+      try {
+        await authFetch("/api/auth/logout", { method: "POST" });
+      } catch (_) {}
+      window.location.replace("/");
+    });
+
+    document.getElementById("profile-btn").addEventListener("click", () => {
+      if (!currentUser) return;
+      document.getElementById("profile-username").value = currentUser.username;
+      document.getElementById("profile-email").value = currentUser.email;
+      document.getElementById("profile-current").value = "";
+      document.getElementById("profile-new").value = "";
+      document.getElementById("profile-status").className = "status";
+      document.getElementById("profile-status").textContent = "";
+      document.getElementById("profile-backdrop").classList.add("show");
+      document.getElementById("profile-backdrop").setAttribute("aria-hidden", "false");
+      document.body.classList.add("modal-open");
+    });
+
+    document.getElementById("profile-cancel").addEventListener("click", () => {
+      document.getElementById("profile-backdrop").classList.remove("show");
+      document.getElementById("profile-backdrop").setAttribute("aria-hidden", "true");
+      document.body.classList.remove("modal-open");
+    });
+
+    document.getElementById("profile-save").addEventListener("click", async () => {
+      const statusEl = document.getElementById("profile-status");
+      statusEl.className = "status";
+      try {
+        const username = document.getElementById("profile-username").value.trim();
+        const email = document.getElementById("profile-email").value.trim();
+        const current = document.getElementById("profile-current").value;
+        const nextPass = document.getElementById("profile-new").value;
+
+        const res = await authFetch("/api/profile", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, email }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Profile update failed");
+        currentUser = data.user;
+        applyUserUi();
+
+        if (current && nextPass) {
+          const pwRes = await authFetch("/api/profile/password", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ current_password: current, new_password: nextPass }),
+          });
+          const pwData = await pwRes.json();
+          if (!pwRes.ok) throw new Error(pwData.error || "Password update failed");
+        }
+
+        statusEl.className = "status show ok";
+        statusEl.textContent = "Profile saved.";
+        setTimeout(() => {
+          document.getElementById("profile-backdrop").classList.remove("show");
+          document.body.classList.remove("modal-open");
+        }, 700);
+      } catch (err) {
+        statusEl.className = "status show err";
+        statusEl.textContent = err.message;
+      }
+    });
+
+    document.getElementById("create-user-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const st = document.getElementById("create-user-status");
+      st.className = "status";
+      try {
+        const res = await authFetch("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: document.getElementById("new-username").value.trim(),
+            email: document.getElementById("new-email").value.trim(),
+            password: document.getElementById("new-password").value,
+            role: document.getElementById("new-role").value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Create failed");
+        st.className = "status show ok";
+        st.textContent = "User " + data.user.username + " created.";
+        e.target.reset();
+        loadAdminUsers().catch(() => {});
+        populateLogsUserFilter().catch(() => {});
+      } catch (err) {
+        st.className = "status show err";
+        st.textContent = err.message;
+      }
+    });
+
+    document.getElementById("users-refresh").addEventListener("click", () => loadAdminUsers().catch(() => {}));
+    document.getElementById("activity-refresh").addEventListener("click", () => loadActivity().catch(() => {}));
+
+    document.getElementById("admin-users-body").addEventListener("click", async (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      try {
+        if (btn.dataset.userEdit) {
+          const id = btn.dataset.userEdit;
+          const username = prompt("New username:");
+          if (username == null) return;
+          const email = prompt("New email:");
+          if (email == null) return;
+          await adminUpdateUser(id, { username: username.trim(), email: email.trim() });
+        } else if (btn.dataset.userPass) {
+          const id = btn.dataset.userPass;
+          const password = prompt("New password (min 8 characters):");
+          if (!password) return;
+          const res = await authFetch("/api/admin/users/" + id + "/password", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password, force_password_change: true }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Password reset failed");
+          alert("Password updated.");
+        } else if (btn.dataset.userToggle) {
+          const id = btn.dataset.userToggle;
+          const active = btn.dataset.active !== "1";
+          if (!confirm(active ? "Enable this user?" : "Disable this user?")) return;
+          await adminUpdateUser(id, { active });
+        }
+        loadAdminUsers().catch(() => {});
+        populateLogsUserFilter().catch(() => {});
+      } catch (err) {
+        alert(err.message);
+      }
+    });
 
     function esc(text) {
       return String(text == null ? "" : text)
@@ -1476,17 +1915,31 @@
 
     function showLogsView() {
       activeTab = "logs";
-      controlView.classList.add("hidden");
+      hideAllViews();
       logsView.classList.remove("hidden");
       applyLogsUi();
       loadLogs().catch(() => {});
     }
 
+    function showAdminView() {
+      activeTab = "admin";
+      hideAllViews();
+      adminView.classList.remove("hidden");
+      document.getElementById("kicker").textContent = "Administration";
+      document.getElementById("kicker").className = "kicker";
+      document.getElementById("title").textContent = "Users & activity";
+      document.getElementById("subtitle").textContent =
+        "Manage team accounts and review sign-in and server action history.";
+      updateTabUi();
+      loadAdminUsers().catch(() => {});
+      loadActivity().catch(() => {});
+    }
+
     function showControlView(nextProvider) {
       activeTab = nextProvider;
       provider = nextProvider;
+      hideAllViews();
       controlView.classList.remove("hidden");
-      logsView.classList.add("hidden");
       applyProviderUi();
     }
 
@@ -1537,6 +1990,10 @@
       for (let i = 0; i < attempts; i += 1) {
         try {
           const res = await fetch(url, { cache: "no-store" });
+          if (res.status === 401) {
+            window.location.replace("/");
+            throw new Error("Session expired");
+          }
           const data = await res.json();
           return { res, data };
         } catch (err) {
@@ -1814,7 +2271,11 @@
         showLogsView();
         return;
       }
-      if (tab === provider && activeTab !== "logs") return;
+      if (tab === "admin") {
+        showAdminView();
+        return;
+      }
+      if (tab === provider && activeTab !== "logs" && activeTab !== "admin") return;
       switchProvider(tab);
     }
 
@@ -1862,9 +2323,19 @@
 
     initSession();
 
-    fetch("/api/version", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => {
+    async function initApp() {
+      try {
+        const meRes = await fetch("/api/auth/me", { cache: "no-store" });
+        if (!meRes.ok) {
+          window.location.replace("/");
+          return;
+        }
+        const meData = await meRes.json();
+        currentUser = meData.user;
+        applyUserUi();
+
+        const verRes = await fetch("/api/version", { cache: "no-store" });
+        const d = await verRes.json();
         document.getElementById("app-version").textContent = "v" + (d.version || "?");
         if (d.providers) {
           enabled = d.providers;
@@ -1876,15 +2347,20 @@
             provider = firstEnabledProvider();
           }
         }
+        if (currentUser.role === "admin") {
+          await populateLogsUserFilter();
+        }
         showControlView(provider);
         if (!providerOperationActive(provider)) hideStatus();
-        return loadList();
-      })
-      .catch((err) => {
-        document.getElementById("app-version").textContent = "v1.7.1";
-        meta.textContent = "Could not load list.";
+        await loadList();
+      } catch (err) {
+        document.getElementById("app-version").textContent = "v2.0.0";
+        meta.textContent = "Could not load app.";
         showStatus("err", err.message);
-      });
+      }
+    }
+
+    initApp();
   </script>
 </body>
 </html>
