@@ -1,6 +1,6 @@
 {
   "name": "dropkick",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "private": true,
   "description": "Dropkick — power cycle, stop, and start cloud servers on DigitalOcean, Vultr, and Linode by public IPv4",
   "main": "server.js",

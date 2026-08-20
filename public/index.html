@@ -62,6 +62,9 @@
       --pill-stopped-text: #b7bec9;
       --focus-ring: #3159a8;
       --footer-strong: #c5ceda;
+      --footer-bg: #0f1218;
+      --footer-border: #252a33;
+      --footer-text: #8b95a5;
       --modal-backdrop: rgba(5, 8, 14, 0.72);
       --modal-shadow: rgba(0, 0, 0, 0.45);
       --table-head-bg: rgba(0, 0, 0, 0.15);
@@ -110,6 +113,9 @@
       --pill-stopped-text: #64748b;
       --focus-ring: #93c5fd;
       --footer-strong: #475569;
+      --footer-bg: #e8ecf2;
+      --footer-border: #d4dce8;
+      --footer-text: #64748b;
       --modal-backdrop: rgba(15, 23, 42, 0.35);
       --modal-shadow: rgba(15, 23, 42, 0.12);
       --table-head-bg: rgba(15, 23, 42, 0.04);
@@ -484,15 +490,64 @@
     .status.ok { background: var(--ok-bg); color: var(--ok); }
     .status.err { background: var(--danger-bg); color: var(--danger); }
     .status.warn { background: var(--warn-bg); color: var(--warn); }
-    .footer {
+    .site-footer {
       margin-top: auto;
-      padding-top: 2rem;
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.78rem;
-      line-height: 1.5;
+      background: var(--footer-bg);
+      border-top: 1px solid var(--footer-border);
+      position: relative;
+      transition: background 0.2s ease, border-color 0.2s ease;
     }
-    .footer strong { color: var(--footer-strong); font-weight: 600; }
+    .site-footer::before {
+      content: "";
+      position: absolute;
+      top: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        var(--accent) 18%,
+        var(--vultr) 50%,
+        var(--linode) 82%,
+        transparent 100%
+      );
+      opacity: 0.85;
+    }
+    .site-footer-inner {
+      max-width: 68rem;
+      margin: 0 auto;
+      padding: 1rem 1.25rem 1.35rem;
+      text-align: center;
+      color: var(--footer-text);
+      font-size: 0.78rem;
+      line-height: 1.55;
+      font-family: var(--font-mono);
+      letter-spacing: 0.02em;
+    }
+    .site-footer-brand {
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: var(--brand-gradient);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .site-footer-sep {
+      margin: 0 0.35rem;
+      opacity: 0.45;
+    }
+    .site-footer strong,
+    #app-version {
+      color: var(--footer-strong);
+      font-weight: 600;
+    }
+    #session-note {
+      display: block;
+      margin-top: 0.35rem;
+      font-size: 0.72rem;
+      opacity: 0.88;
+    }
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -787,11 +842,14 @@
     </section>
     </div>
 
-    <p class="footer">
-      Dropkick · <strong id="app-version">v…</strong><br />
-      <span id="session-note"></span>
-    </p>
   </main>
+
+  <footer class="site-footer">
+    <div class="site-footer-inner">
+      <span class="site-footer-brand">Dropkick</span><span class="site-footer-sep">·</span><strong id="app-version">v…</strong>
+      <span id="session-note"></span>
+    </div>
+  </footer>
 
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-relevant="additions"></div>
 
