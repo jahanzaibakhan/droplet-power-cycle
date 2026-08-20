@@ -570,6 +570,10 @@ app.use(
   })
 );
 
+app.get("/", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 app.use((err, _req, res, _next) => {
   const status = err.status || 500;
   console.error("Request error:", err.message);

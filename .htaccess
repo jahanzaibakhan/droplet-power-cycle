@@ -1,6 +1,12 @@
-# Cloudways: proxy this PHP app URL to the Node process on localhost.
+# Cloudways: proxy this app URL to the Node process on localhost.
 Options -Indexes
 DirectoryIndex disabled
+
+<IfModule mod_headers.c>
+  Header always set Cache-Control "no-store, no-cache, must-revalidate, private"
+  Header always set Pragma "no-cache"
+  Header always set Surrogate-Control "no-store"
+</IfModule>
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
