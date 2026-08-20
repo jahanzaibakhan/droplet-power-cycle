@@ -981,7 +981,7 @@
 
       <div class="card-body">
         <label class="field-label" for="ip">Public IPv4</label>
-        <input id="ip" type="text" list="server-options" placeholder="161.35.221.71" autocomplete="off" />
+        <input id="ip" type="text" list="server-options" placeholder="Enter public IPv4…" autocomplete="off" />
         <datalist id="server-options"></datalist>
 
         <div class="panel" id="server-panel">
@@ -2411,7 +2411,9 @@
       try {
         const meRes = await fetch("/api/auth/me", { cache: "no-store" });
         if (!meRes.ok) {
-          window.location.replace("/");
+          if (!window.location.pathname.endsWith("login.html")) {
+            window.location.replace("/");
+          }
           return;
         }
         const meData = await meRes.json();

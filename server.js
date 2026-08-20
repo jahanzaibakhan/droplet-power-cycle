@@ -815,21 +815,28 @@ if (linode) {
   });
 }
 
+function sendAppShell(req, res) {
+  if (!req.user) {
+    return res.sendFile(path.join(__dirname, "public", "login.html"));
+  }
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+}
+
+app.get("/", sendAppShell);
+app.get("/index.html", sendAppShell);
+app.get("/login.html", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "login.html"));
+});
+
 app.use(
   express.static(path.join(__dirname, "public"), {
+    index: false,
     setHeaders(res) {
       res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
       res.set("Surrogate-Control", "no-store");
     },
   })
 );
-
-app.get("/", (req, res) => {
-  if (!req.user) {
-    return res.sendFile(path.join(__dirname, "public", "login.html"));
-  }
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
 
 app.get("/app", (_req, res) => {
   res.redirect("/");
