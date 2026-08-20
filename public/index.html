@@ -74,6 +74,15 @@
       --op-power-text: #9ec1ff;
       --spinner-track: rgba(158, 193, 255, 0.25);
       --logs-tab: #8b93ff;
+      --btn-primary-grad: linear-gradient(135deg, #7eb0ff 0%, #4d8dff 48%, #356fd4 100%);
+      --btn-vultr-grad: linear-gradient(135deg, #7eceff 0%, #51b9ff 48%, #2899e0 100%);
+      --btn-linode-grad: linear-gradient(135deg, #3ddea0 0%, #14b87a 48%, #0a9660 100%);
+      --btn-danger-grad: linear-gradient(135deg, #ff8a8a 0%, #c03943 50%, #9b2e36 100%);
+      --btn-ok-grad: linear-gradient(135deg, #5eeaa8 0%, #2a8f5c 50%, #1d6b45 100%);
+      --btn-ghost-grad: linear-gradient(180deg, #303640 0%, #262b34 100%);
+      --btn-shadow: rgba(77, 141, 255, 0.28);
+      --btn-shadow-danger: rgba(192, 57, 67, 0.28);
+      --btn-shadow-ok: rgba(29, 107, 69, 0.28);
     }
     html[data-theme="light"] {
       color-scheme: light;
@@ -125,6 +134,15 @@
       --op-power-text: #1d4ed8;
       --spinner-track: rgba(37, 99, 235, 0.2);
       --logs-tab: #6366f1;
+      --btn-primary-grad: linear-gradient(135deg, #60a5fa 0%, #2563eb 48%, #1d4ed8 100%);
+      --btn-vultr-grad: linear-gradient(135deg, #38bdf8 0%, #0284c7 48%, #0369a1 100%);
+      --btn-linode-grad: linear-gradient(135deg, #34d399 0%, #059669 48%, #047857 100%);
+      --btn-danger-grad: linear-gradient(135deg, #f87171 0%, #dc2626 50%, #b91c1c 100%);
+      --btn-ok-grad: linear-gradient(135deg, #4ade80 0%, #059669 50%, #047857 100%);
+      --btn-ghost-grad: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+      --btn-shadow: rgba(37, 99, 235, 0.22);
+      --btn-shadow-danger: rgba(220, 38, 38, 0.2);
+      --btn-shadow-ok: rgba(5, 150, 105, 0.2);
     }
     * { box-sizing: border-box; }
     body {
@@ -164,12 +182,13 @@
       border-radius: 10px;
       padding: 0.48rem 0.8rem;
       font-size: 0.78rem;
-      font-weight: 600;
+      font-weight: 500;
       cursor: pointer;
       font-family: var(--font-mono);
       letter-spacing: 0.02em;
+      transition: transform 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
     }
-    .theme-toggle:hover { color: var(--text); border-color: var(--accent); }
+    .theme-toggle:hover { color: var(--text); border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08); }
     .theme-toggle svg { width: 1rem; height: 1rem; flex-shrink: 0; }
     .brand-logo {
       width: 2.75rem;
@@ -327,19 +346,77 @@
       border-radius: 9px;
       padding: 0.68rem 0.95rem;
       font-size: 0.92rem;
-      font-weight: 650;
+      font-weight: 500;
       cursor: pointer;
       font-family: inherit;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease, background 0.16s ease;
     }
-    button:disabled { opacity: 0.55; cursor: not-allowed; }
-    .primary { background: var(--accent); color: var(--primary-on); }
-    .primary.vultr { background: var(--vultr); }
-    .primary.linode { background: var(--linode); color: var(--primary-linode-on); }
-    .primary.danger { background: var(--btn-danger-solid); color: #fff; }
-    .primary:hover:not(:disabled) { filter: brightness(1.08); }
-    .ghost { background: var(--ghost-bg); color: var(--text); }
-    .danger { background: var(--btn-danger); color: var(--btn-danger-text); }
-    .okbtn { background: var(--btn-ok); color: var(--btn-ok-text); }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+    .primary {
+      background: var(--btn-primary-grad);
+      color: var(--primary-on);
+      box-shadow: 0 2px 10px var(--btn-shadow);
+    }
+    .primary.vultr {
+      background: var(--btn-vultr-grad);
+      box-shadow: 0 2px 10px rgba(81, 185, 255, 0.28);
+    }
+    .primary.linode {
+      background: var(--btn-linode-grad);
+      color: var(--primary-linode-on);
+      box-shadow: 0 2px 10px rgba(20, 184, 122, 0.28);
+    }
+    .primary.danger {
+      background: var(--btn-danger-grad);
+      color: #fff;
+      box-shadow: 0 2px 10px var(--btn-shadow-danger);
+    }
+    .primary:hover:not(:disabled),
+    .danger:hover:not(:disabled),
+    .okbtn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      filter: brightness(1.06);
+    }
+    .primary:hover:not(:disabled) { box-shadow: 0 5px 18px var(--btn-shadow); }
+    .primary.vultr:hover:not(:disabled) { box-shadow: 0 5px 18px rgba(81, 185, 255, 0.38); }
+    .primary.linode:hover:not(:disabled) { box-shadow: 0 5px 18px rgba(20, 184, 122, 0.38); }
+    .primary.danger:hover:not(:disabled) { box-shadow: 0 5px 18px var(--btn-shadow-danger); }
+    .primary:active:not(:disabled),
+    .danger:active:not(:disabled),
+    .okbtn:active:not(:disabled),
+    .ghost:active:not(:disabled) {
+      transform: translateY(0);
+      filter: brightness(0.98);
+    }
+    .ghost {
+      background: var(--btn-ghost-grad);
+      color: var(--text);
+      border: 1px solid var(--line);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    }
+    .ghost:hover:not(:disabled) {
+      transform: translateY(-1px);
+      filter: brightness(1.04);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      border-color: var(--accent);
+    }
+    .danger {
+      background: var(--btn-danger-grad);
+      color: var(--btn-danger-text);
+      box-shadow: 0 2px 10px var(--btn-shadow-danger);
+    }
+    .danger:hover:not(:disabled) { box-shadow: 0 5px 18px var(--btn-shadow-danger); }
+    .okbtn {
+      background: var(--btn-ok-grad);
+      color: var(--btn-ok-text);
+      box-shadow: 0 2px 10px var(--btn-shadow-ok);
+    }
+    .okbtn:hover:not(:disabled) { box-shadow: 0 5px 18px var(--btn-shadow-ok); }
     .meta { margin-top: 0.95rem; color: var(--muted); font-size: 0.78rem; }
     .panel {
       margin-top: 1rem;
@@ -817,12 +894,19 @@
     .mini-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
     .mini-actions button {
       border: 1px solid var(--line);
-      background: var(--ghost-bg);
+      background: var(--btn-ghost-grad);
       color: var(--text);
       border-radius: 8px;
       padding: 0.25rem 0.45rem;
       font-size: 0.72rem;
+      font-weight: 500;
       cursor: pointer;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+    }
+    .mini-actions button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
     }
     .activity-list { max-height: 28rem; overflow: auto; font-size: 0.8rem; }
     .activity-item {
