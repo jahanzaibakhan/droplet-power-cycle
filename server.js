@@ -7,6 +7,9 @@ const express = require("express");
 
 const { createVultrProvider } = require("./providers/vultr");
 const { createLinodeProvider } = require("./providers/linode");
+const { createLinodeSupport } = require("./providers/linodeSupport");
+const { createSupportRouter } = require("./routes/support");
+const trackedTickets = require("./lib/trackedTickets");
 const operationLogs = require("./lib/operationLogs");
 const { probeHost, settleWithReachability, unreachableMessage } = require("./lib/reachability");
 const db = require("./lib/db");
@@ -39,6 +42,8 @@ if (!HAS_DO && !HAS_VULTR && !HAS_LINODE) {
 
 const vultr = HAS_VULTR ? createVultrProvider(VULTR_TOKEN) : null;
 const linode = HAS_LINODE ? createLinodeProvider(LINODE_TOKEN) : null;
+const LINODE_SUPPORT_TOKEN = process.env.LINODE_SUPPORT_TOKEN || (HAS_LINODE ? LINODE_TOKEN : "");
+const linodeSupport = HAS_LINODE && LINODE_SUPPORT_TOKEN ? createLinodeSupport(LINODE_SUPPORT_TOKEN) : null;
 
 /** @type {Map<string, { id: number, name: string }>} */
 const ipToDroplet = new Map();
@@ -831,108 +836,6 @@ if (vultr) {
       next(err);
     }
   });
-
-  app.get("/api/vultr/tickets", async (req, res, next) => {
-    try {
-      const filter = String(req.query.filter || "open").toLowerCase();
-      const q = String(req.query.q || "").slice(0, 120);
-      const force = req.query.refresh === "1";
-      res.json(await vultr.listTickets({ filter, q, force }));
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  app.get("/api/vultr/tickets/severity-options", async (_req, res, next) => {
-    try {
-      res.json(await vultr.getSeverityOptions());
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  app.get("/api/vultr/tickets/:reference", async (req, res, next) => {
-    try {
-      res.json(await vultr.getTicket(req.params.reference));
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  const TICKET_CATEGORIES = ["General Support", "Account Cancellation", "Billing Questions", "Marketplace", "API v2"];
-
-  app.post("/api/vultr/tickets", async (req, res, next) => {
-    try {
-      const body = req.body || {};
-      const subject = String(body.subject || "").trim();
-      const description = String(body.description || "").trim();
-      const severity = String(body.severity || "").trim().toUpperCase();
-      const category = String(body.category || "").trim();
-      const ip = parseIp(body.ip);
-
-      if (!subject || subject.length > 250) {
-        return res.status(400).json({ error: "Subject is required (max 250 characters)." });
-      }
-      if (!description || description.length > 20000) {
-        return res.status(400).json({ error: "Description is required (max 20,000 characters)." });
-      }
-      if (severity && !/^S[1-4]$/.test(severity)) {
-        return res.status(400).json({ error: "Severity must be S1, S2, S3, or S4." });
-      }
-      if (category && !TICKET_CATEGORIES.includes(category)) {
-        return res.status(400).json({ error: "Unknown ticket category." });
-      }
-
-      let subUuid = null;
-      let instanceName = null;
-      if (ip) {
-        if (!IPV4.test(ip)) {
-          return res.status(400).json({ error: `"${ip}" is not a valid IPv4 address.` });
-        }
-        const found = await vultr.resolveByIp(ip);
-        if (!found) {
-          return res.status(404).json({
-            error: `No Vultr instance found with public IPv4 ${ip}. Clear the server field to raise an unlinked ticket.`,
-          });
-        }
-        subUuid = found.id;
-        instanceName = found.name;
-      }
-
-      const result = await vultr.createTicket({ subject, description, severity, subUuid, category });
-      const reference = (result.ticket && result.ticket.reference) || result.raw_reference;
-      operationLogs.appendLog({
-        provider: "vultr",
-        upstream: `${reference || "ticket"} · ${subject}`.slice(0, 250),
-        ip: ip || null,
-        operation: "ticket_create",
-        ...opUser(req),
-      });
-      res.status(201).json({ ok: true, reference, ticket: result.ticket, instance_name: instanceName });
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  app.post("/api/vultr/tickets/:reference/replies", async (req, res, next) => {
-    try {
-      const description = String((req.body && req.body.description) || "").trim();
-      if (!description || description.length > 20000) {
-        return res.status(400).json({ error: "Reply text is required (max 20,000 characters)." });
-      }
-      const result = await vultr.replyTicket(req.params.reference, description);
-      operationLogs.appendLog({
-        provider: "vultr",
-        upstream: `${result.reference} · reply`,
-        ip: null,
-        operation: "ticket_reply",
-        ...opUser(req),
-      });
-      res.status(201).json(result);
-    } catch (err) {
-      next(err);
-    }
-  });
 }
 
 if (linode) {
@@ -1045,6 +948,20 @@ if (linode) {
   });
 }
 
+app.use(
+  "/api/support",
+  createSupportRouter({
+    vultr,
+    linode,
+    linodeSupport,
+    resolveDroplet: HAS_DO ? resolveDropletByIp : null,
+    operationLogs,
+    opUser,
+    parseIp,
+    IPV4,
+  })
+);
+
 function sendAppShell(req, res) {
   if (!req.user) {
     return res.sendFile(path.join(__dirname, "public", "login.html"));
@@ -1095,6 +1012,7 @@ async function start() {
     process.exit(1);
   }
 
+  await trackedTickets.ensureSchema();
   await sessions.cleanupExpired();
   setInterval(() => sessions.cleanupExpired().catch(() => {}), 60 * 60 * 1000).unref();
 
@@ -1124,6 +1042,7 @@ async function start() {
     linode.startBackgroundRefresh();
     linode.startMaintenanceRefresh();
   }
+  if (linodeSupport) linodeSupport.start();
 }
 
 start();

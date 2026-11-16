@@ -1,6 +1,6 @@
 # Dropkick
 
-**Dropkick** is a dark-mode web app to **power cycle**, **stop**, and **start** cloud servers by public IPv4 on **DigitalOcean** and **Vultr**.
+**Dropkick** is a dark-mode web app to **power cycle**, **stop**, and **start** cloud servers by public IPv4 on **DigitalOcean**, **Vultr**, and **Linode**, with health checks and provider support tickets.
 
 The API token stays in server `.env` only — never sent to the browser.
 
@@ -42,18 +42,29 @@ Large accounts: droplet IPs are indexed in the background; type a name or IP to 
 | `GET` | `/api/droplet/diagnose?ip=` | Droplet + TCP reachability (22/80/443) + health verdict |
 | `GET` | `/api/linode/diagnose?ip=` | Linode + TCP reachability + health verdict + scheduled/in-progress maintenance |
 | `GET` | `/api/vultr/diagnose?ip=` | Vultr instance + TCP reachability (22/80/443) + health verdict + linked tickets |
-| `GET` | `/api/vultr/tickets?filter=open\|resolved\|closed\|all&q=` | Search the newest 1,000 tickets (a reference lookup also reaches older ones) |
-| `GET` | `/api/vultr/tickets/:reference` | Ticket details and replies |
-| `POST` | `/api/vultr/tickets` | Body `{ "subject", "description", "severity"?, "ip"? }` — `ip` links the ticket to the instance |
-| `POST` | `/api/vultr/tickets/:reference/replies` | Body `{ "description" }` |
+| `GET` | `/api/support/:provider/capabilities` | Ticket mode (`api` or `tracked`), severities, subject limit, portal links, Linode setup steps |
+| `GET` | `/api/support/:provider/tickets?filter=open\|awaiting\|resolved\|closed\|all&q=&refresh=1` | Ticket list with counts per filter |
+| `GET` | `/api/support/:provider/linked?ip=&resource_id=` | Tickets that reference a server |
+| `GET` | `/api/support/:provider/tickets/:reference` | Ticket details and conversation |
+| `POST` | `/api/support/:provider/tickets` | Body `{ "subject", "description", "severity"?, "ip"? }` — `ip` links the ticket to the server |
+| `POST` | `/api/support/:provider/tickets/:reference/replies` | Body `{ "description" }` (a note on tracked tickets) |
+| `PATCH` | `/api/support/:provider/tickets/:reference` | Body `{ "action": "close"\|"resolve" }`, or for tracked tickets `{ "status", "reference" }` |
+
+`:provider` is `digitalocean`, `vultr`, or `linode`.
 
 ## Health checks and tickets
 
 No provider API reports a failed host node — DigitalOcean says `active`, Linode `running`, Vultr `active / running / ok`. On every lookup Dropkick also opens TCP connections to ports 22, 80, and 443 from its own server. If none answer, the server is shown as **Unreachable** even though the API says running, and power cycle / start only report success once the server answers again (up to 4 minutes, then "not reachable"). Linode servers also show scheduled or in-progress platform maintenance from `/account/maintenance`.
 
-Support tickets are only available for Vultr: DigitalOcean has no ticket API, and Linode's ticket endpoints need a token with the `account:read_write` scope.
+Each provider has a **tickets** tab (shown next to its server tab) and a tickets section in the server panel:
 
-The **Vultr tickets** tab lists, searches, and opens tickets, posts replies, and raises new tickets (optionally linked to an instance by IP). Ticket creation and replies are recorded in the operation log.
+| Provider | Mode | What works |
+|----------|------|------------|
+| Vultr | Live API | List, search, read, reply, resolve, close, raise |
+| Linode | Live API when `LINODE_SUPPORT_TOKEN` (or `LINODE_API_TOKEN`) has **Account: Read/Write** | List, search, read, reply, close, raise. Without that scope, Linode falls back to tracked mode and shows the setup steps |
+| DigitalOcean | Tracked (no ticket API) | Dropkick saves the ticket, copies the text, opens the DigitalOcean support portal, and tracks the provider ticket number, status, and notes |
+
+Raising a ticket checks the server first (health, port check, maintenance), warns about open tickets already linked to it, offers issue templates with a matching severity, and can append the live diagnostics to the description. Tracked tickets are stored in MySQL (`tracked_tickets`, `tracked_ticket_events`). Every ticket action is recorded in the operation log.
 
 ## Production (Cloudways)
 

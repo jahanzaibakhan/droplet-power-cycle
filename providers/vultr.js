@@ -635,6 +635,20 @@ function createVultrProvider(token) {
     return { ok: true, reference: ref };
   }
 
+  async function setTicketState(reference, action) {
+    const ref = String(reference || "").trim().toUpperCase();
+    if (!TICKET_REF.test(ref)) {
+      const error = new Error("Invalid ticket reference.");
+      error.status = 400;
+      throw error;
+    }
+    await apiFetch(`/tickets/${encodeURIComponent(ref)}/${action}`, { method: "POST" });
+    const next = action === "close" ? "closed" : "resolved";
+    ticketCache.rows = ticketCache.rows.map((t) => (t.reference === ref ? { ...t, status: next } : t));
+    refreshTickets().catch(() => {});
+    return { ok: true, reference: ref, status: next };
+  }
+
   function startTicketRefresh() {
     refreshTickets().catch(() => {});
     setInterval(() => refreshTickets().catch(() => {}), TICKET_TTL_MS).unref();
@@ -702,6 +716,10 @@ function createVultrProvider(token) {
     getSeverityOptions,
     createTicket,
     replyTicket,
+    closeTicket: (ref) => setTicketState(ref, "close"),
+    resolveTicket: (ref) => setTicketState(ref, "resolve"),
+    ticketCacheSnapshot: () => ticketCache,
+    ensureTickets,
     startTicketRefresh,
     isTicketRef: (ref) => TICKET_REF.test(String(ref || "").trim().toUpperCase()),
   };

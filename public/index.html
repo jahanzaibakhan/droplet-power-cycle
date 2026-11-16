@@ -1007,7 +1007,179 @@
     }
     .pill.down { background: var(--danger-bg); color: var(--danger); }
     .pill.warn { background: var(--warn-bg); color: var(--warn); }
-    .tab.active[data-tab="tickets"] { background: var(--vultr); }
+    .tab.active[data-tab="tickets"] { background: var(--accent); }
+    .tab.active[data-tab="tickets"][data-support="vultr"] { background: var(--vultr); }
+    .tab.active[data-tab="tickets"][data-support="linode"] { background: var(--linode); }
+    #tickets-view { --sp: var(--accent); }
+    #tickets-view[data-provider="vultr"] { --sp: var(--vultr); }
+    #tickets-view[data-provider="linode"] { --sp: var(--linode); }
+    #tickets-view .kicker { color: var(--sp); }
+    .sp-banner {
+      margin-bottom: 1rem;
+      padding: 0.85rem 1rem;
+      border-radius: 12px;
+      border: 1px solid var(--info-border);
+      background: var(--info-bg);
+      color: var(--text);
+      font-size: 0.85rem;
+      line-height: 1.55;
+    }
+    .sp-banner.warn { border-color: var(--warn); background: var(--warn-bg); }
+    .sp-banner strong { color: var(--text); }
+    .sp-banner ol { margin: 0.45rem 0 0; padding-left: 1.2rem; }
+    .sp-banner code { font-family: var(--font-mono); font-size: 0.8rem; }
+    .sp-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    @media (max-width: 44rem) { .sp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .sp-stat {
+      text-align: left;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0.8rem 0.95rem;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .sp-stat:hover { border-color: var(--sp); transform: translateY(-1px); }
+    .sp-stat.active { border-color: var(--sp); box-shadow: 0 0 0 1px var(--sp) inset; }
+    .sp-stat span { display: block; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .sp-stat strong { display: block; font-size: 1.55rem; font-weight: 800; margin-top: 0.15rem; letter-spacing: -0.02em; }
+    .sp-stat.attn strong { color: var(--warn); }
+    .sp-stat small { display: block; color: var(--muted); font-size: 0.72rem; margin-top: 0.1rem; }
+    #tickets-view .filter-chip.active { background: var(--sp); }
+    .sp-awaiting {
+      display: inline-block;
+      margin-left: 0.35rem;
+      border-radius: 999px;
+      padding: 0.08rem 0.45rem;
+      font-size: 0.68rem;
+      font-weight: 700;
+      background: var(--warn-bg);
+      color: var(--warn);
+      white-space: nowrap;
+    }
+    .sp-awaiting.provider { background: var(--chip); color: var(--muted); }
+    .sp-server-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-top: 0.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .sp-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+    .sp-modal-head h3 { word-break: break-word; }
+    .sp-x { padding: 0.3rem 0.6rem; font-size: 0.85rem; flex-shrink: 0; }
+    .sp-tracked {
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: 0.65rem 0.75rem;
+      margin-bottom: 0.85rem;
+      display: grid;
+      gap: 0.5rem;
+    }
+    .sp-tracked-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
+    .sp-tracked-row label { color: var(--muted); font-weight: 600; min-width: 7.5rem; }
+    .sp-tracked-row input, .sp-tracked-row select {
+      flex: 1;
+      min-width: 10rem;
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      color: var(--text);
+      border-radius: 9px;
+      padding: 0.45rem 0.6rem;
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+    }
+    .sp-tracked-row select { font-family: inherit; flex: 0 1 14rem; }
+    .sp-tracked-row button, .sp-link-btn { padding: 0.45rem 0.7rem; font-size: 0.8rem; }
+    .sp-link-btn {
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+      border-radius: 9px;
+      background: var(--btn-ghost-grad);
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+    .sp-thread { display: flex; flex-direction: column; gap: 0.6rem; }
+    .sp-msg {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0.7rem 0.85rem;
+      background: var(--bg-elev);
+      max-width: 92%;
+      align-self: flex-end;
+    }
+    .sp-msg.staff { align-self: flex-start; border-left: 3px solid var(--sp-msg, var(--vultr)); background: var(--card); }
+    .sp-msg.description { align-self: stretch; max-width: none; }
+    .sp-msg-head { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.74rem; color: var(--muted); margin-bottom: 0.35rem; }
+    .sp-msg-head strong { color: var(--text); }
+    .sp-staff-badge { margin-left: 0.35rem; border-radius: 999px; padding: 0.05rem 0.4rem; font-size: 0.66rem; font-weight: 700; background: var(--info-bg); color: var(--info); }
+    .sp-msg-body { white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; line-height: 1.5; }
+    .sp-event { align-self: center; font-size: 0.74rem; color: var(--muted); font-family: var(--font-mono); }
+    .sp-quick { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.75rem; }
+    .sp-quick button, .sp-templates button {
+      border: 1px solid var(--line);
+      background: var(--bg-elev);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.3rem 0.7rem;
+      font-size: 0.76rem;
+      font-weight: 600;
+    }
+    .sp-quick button:hover, .sp-templates button:hover { border-color: var(--accent); }
+    .sp-templates { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .sp-templates button.active { background: var(--accent); color: var(--tab-active-text); border-color: transparent; }
+    .sp-optional { color: var(--muted); font-weight: 400; font-size: 0.72rem; }
+    .sp-ip-row { display: flex; gap: 0.5rem; }
+    .sp-ip-row input { flex: 1; font-family: var(--font-mono); }
+    .sp-ip-row button { padding: 0.5rem 0.8rem; font-size: 0.82rem; white-space: nowrap; }
+    .sp-server-card {
+      margin-top: 0.5rem;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.6rem 0.75rem;
+      font-size: 0.8rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .sp-server-card.err { border-color: var(--danger); color: var(--danger); }
+    .sp-dup {
+      margin-top: 0.5rem;
+      border: 1px solid var(--warn);
+      background: var(--warn-bg);
+      border-radius: 10px;
+      padding: 0.6rem 0.75rem;
+      font-size: 0.8rem;
+    }
+    .sp-dup strong { color: var(--warn); }
+    .sp-dup .ticket-line { margin: 0.4rem 0 0; }
+    .sp-diag {
+      margin: 0 0 0.5rem;
+      padding: 0.65rem 0.75rem;
+      border-radius: 10px;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      color: var(--muted);
+      max-height: 11rem;
+      overflow: auto;
+    }
+    .t-status.new { background: var(--info-bg); color: var(--info); }
+    .t-status.waiting { background: var(--chip); color: var(--chip-text); }
+    .t-sev.urgent, .t-sev.\31 { color: var(--danger); }
+    .t-sev.high, .t-sev.\32 { color: var(--warn); }
     .health-box {
       width: 100%;
       margin-bottom: 1rem;
@@ -1201,51 +1373,54 @@
     </div>
 
     <div id="tickets-view" class="view-panel hidden">
-    <p class="kicker vultr">Vultr</p>
-    <h1>Support tickets</h1>
-    <p class="sub">Check ticket status, read Vultr replies, respond, and raise new tickets on the Vultr account.</p>
-    <section class="card logs-section" aria-labelledby="tickets-title">
+    <p class="kicker" id="sp-kicker">Support</p>
+    <h1 id="sp-title">Support tickets</h1>
+    <p class="sub" id="sp-sub"></p>
+    <div class="sp-banner hidden" id="sp-banner"></div>
+    <div class="sp-stats" id="sp-stats"></div>
+    <section class="card logs-section" aria-labelledby="sp-list-title">
       <div class="logs-head">
-        <h2 id="tickets-title">Support tickets</h2>
+        <h2 id="sp-list-title">Tickets</h2>
         <div class="modal-actions-right">
-          <button type="button" class="ghost" id="tickets-refresh">Refresh</button>
-          <button type="button" class="primary vultr" id="tickets-new">Raise ticket</button>
+          <button type="button" class="ghost" id="sp-refresh">Refresh</button>
+          <button type="button" class="primary" id="sp-new">Raise ticket</button>
         </div>
       </div>
       <div class="tickets-toolbar">
-        <div class="filter-chips" id="tickets-filters">
+        <div class="filter-chips" id="sp-filters">
           <button type="button" class="filter-chip active" data-filter="open">Open</button>
+          <button type="button" class="filter-chip" data-filter="awaiting">Needs reply</button>
           <button type="button" class="filter-chip" data-filter="resolved">Resolved</button>
           <button type="button" class="filter-chip" data-filter="closed">Closed</button>
           <button type="button" class="filter-chip" data-filter="all">All</button>
         </div>
-        <input type="text" id="tickets-search" placeholder="Search reference, IP, subject, or person…" autocomplete="off" />
+        <input type="text" id="sp-search" placeholder="Search reference, IP, subject, or person…" autocomplete="off" />
       </div>
-      <div class="status" id="tickets-status" role="status"></div>
-      <div class="logs-wrap hidden" id="tickets-wrap">
+      <div class="status" id="sp-status" role="status"></div>
+      <div class="logs-wrap hidden" id="sp-wrap">
         <table class="logs-table tickets-table">
           <thead>
             <tr>
-              <th>Reference</th>
+              <th>Ticket</th>
               <th>Subject</th>
-              <th>Sev</th>
+              <th id="sp-sev-head">Severity</th>
               <th>Status</th>
-              <th>Last reply</th>
+              <th>Last activity</th>
               <th>Opened by</th>
             </tr>
           </thead>
-          <tbody id="tickets-body"></tbody>
+          <tbody id="sp-body"></tbody>
         </table>
       </div>
-      <p class="logs-empty" id="tickets-empty">Loading tickets…</p>
-      <p class="meta" id="tickets-meta"></p>
+      <p class="logs-empty" id="sp-empty">Loading tickets…</p>
+      <p class="meta" id="sp-meta"></p>
     </section>
     </div>
 
     <div id="logs-view" class="view-panel hidden">
     <p class="kicker">History</p>
     <h1>Operation log</h1>
-    <p class="sub">Power cycle, stop, and start actions across DigitalOcean, Vultr, and Linode, plus Vultr tickets raised or replied to from Dropkick. Times shown in your local timezone (12-hour).</p>
+    <p class="sub">Power cycle, stop, and start actions across DigitalOcean, Vultr, and Linode, plus support tickets raised, replied to, or tracked from Dropkick. Times shown in your local timezone (12-hour).</p>
 
     <section class="card logs-section" id="logs-section" aria-labelledby="logs-title">
       <div class="logs-head">
@@ -1390,52 +1565,93 @@
     </div>
   </div>
 
-  <div class="modal-backdrop" id="ticket-backdrop" aria-hidden="true">
-    <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="ticket-title">
-      <h3 id="ticket-title">Ticket</h3>
-      <div class="ticket-meta" id="ticket-meta"></div>
-      <div class="modal-scroll" id="ticket-replies"></div>
-      <div id="ticket-reply-wrap">
-        <div class="profile-field" style="margin-top:0.85rem">
-          <label for="ticket-reply-text">Reply to Vultr</label>
-          <textarea id="ticket-reply-text" maxlength="20000" style="min-height:5.5rem" placeholder="Write a reply…"></textarea>
+  <div class="modal-backdrop" id="sp-ticket-backdrop" aria-hidden="true">
+    <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="sp-t-title">
+      <div class="sp-modal-head">
+        <h3 id="sp-t-title">Ticket</h3>
+        <button type="button" class="ghost sp-x" id="sp-t-x" aria-label="Close">✕</button>
+      </div>
+      <div class="ticket-meta" id="sp-t-meta"></div>
+      <div class="sp-tracked hidden" id="sp-t-tracked">
+        <div class="sp-tracked-row">
+          <label for="sp-t-ref">Provider ticket #</label>
+          <input id="sp-t-ref" type="text" maxlength="64" autocomplete="off" placeholder="Paste the number from the provider portal" />
+          <button type="button" class="ghost" id="sp-t-ref-save">Save</button>
+          <a class="ghost sp-link-btn" id="sp-t-portal" href="#" target="_blank" rel="noopener">Open portal ↗</a>
+          <button type="button" class="ghost" id="sp-t-copy">Copy ticket text</button>
+        </div>
+        <div class="sp-tracked-row">
+          <label for="sp-t-state">Status</label>
+          <select id="sp-t-state">
+            <option value="open">Open</option>
+            <option value="waiting">Waiting on provider</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+          </select>
         </div>
       </div>
-      <div class="status" id="ticket-status"></div>
-      <div class="modal-actions" style="margin-top:0.85rem">
-        <button type="button" class="ghost" id="ticket-close">Close</button>
-        <button type="button" class="primary vultr" id="ticket-reply-send">Send reply</button>
+      <div class="modal-scroll sp-thread" id="sp-t-thread"></div>
+      <div id="sp-t-compose">
+        <div class="sp-quick" id="sp-t-quick"></div>
+        <div class="profile-field" style="margin:0.5rem 0 0">
+          <textarea id="sp-t-text" maxlength="20000" style="min-height:5.5rem" placeholder="Write a reply…"></textarea>
+        </div>
+      </div>
+      <div class="status" id="sp-t-status"></div>
+      <div class="modal-actions split" style="margin-top:0.85rem">
+        <div class="modal-actions-right">
+          <button type="button" class="ghost" id="sp-t-resolve">Mark resolved</button>
+          <button type="button" class="danger" id="sp-t-close">Close ticket</button>
+          <a class="ghost sp-link-btn hidden" id="sp-t-extlink" href="#" target="_blank" rel="noopener">Open in provider ↗</a>
+        </div>
+        <button type="button" class="primary" id="sp-t-send">Send reply</button>
       </div>
     </div>
   </div>
 
-  <div class="modal-backdrop" id="new-ticket-backdrop" aria-hidden="true">
-    <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="new-ticket-title">
-      <h3 id="new-ticket-title">Raise Vultr ticket</h3>
+  <div class="modal-backdrop" id="sp-new-backdrop" aria-hidden="true">
+    <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="sp-n-title">
+      <div class="sp-modal-head">
+        <h3 id="sp-n-title">Raise ticket</h3>
+        <button type="button" class="ghost sp-x" id="sp-n-x" aria-label="Close">✕</button>
+      </div>
+      <div class="sp-banner hidden" id="sp-n-mode"></div>
       <div class="modal-scroll">
         <div class="profile-field">
-          <label for="nt-ip">Server IP <span style="color:var(--muted);font-weight:400">(optional — links the ticket to the instance)</span></label>
-          <input id="nt-ip" type="text" autocomplete="off" placeholder="e.g. 64.176.174.168" />
+          <label for="sp-n-ip">Server IP <span class="sp-optional">optional — links the ticket and adds live diagnostics</span></label>
+          <div class="sp-ip-row">
+            <input id="sp-n-ip" type="text" autocomplete="off" placeholder="e.g. 64.176.174.168" />
+            <button type="button" class="ghost" id="sp-n-check">Check server</button>
+          </div>
+          <div id="sp-n-server"></div>
         </div>
         <div class="profile-field">
-          <label for="nt-subject">Subject</label>
-          <input id="nt-subject" type="text" maxlength="250" autocomplete="off" />
+          <label>Issue type</label>
+          <div class="sp-templates" id="sp-n-templates"></div>
         </div>
         <div class="profile-field">
-          <label for="nt-severity">Severity</label>
-          <select id="nt-severity"><option value="">Not set</option></select>
-          <span class="field-hint" id="nt-severity-hint"></span>
+          <label for="sp-n-subject">Subject <span class="sp-optional" id="sp-n-count"></span></label>
+          <input id="sp-n-subject" type="text" autocomplete="off" />
         </div>
         <div class="profile-field">
-          <label for="nt-description">Description</label>
-          <textarea id="nt-description" maxlength="20000" style="min-height:10rem"></textarea>
-          <span class="field-hint">Sent to Vultr support as the first message. The ticket is created on the shared Vultr account.</span>
+          <label for="sp-n-severity" id="sp-n-sev-label">Severity</label>
+          <select id="sp-n-severity"><option value="">Not set</option></select>
+          <span class="field-hint" id="sp-n-sev-hint"></span>
         </div>
+        <div class="profile-field">
+          <label for="sp-n-desc">Description</label>
+          <textarea id="sp-n-desc" maxlength="18000" style="min-height:9rem"></textarea>
+        </div>
+        <label class="modal-check" id="sp-n-diag-wrap">
+          <input type="checkbox" id="sp-n-diag" checked />
+          <span>Append live diagnostics (API state, port check, health verdict)</span>
+        </label>
+        <pre class="sp-diag hidden" id="sp-n-diag-preview"></pre>
       </div>
-      <div class="status" id="nt-status"></div>
+      <div class="status" id="sp-n-status"></div>
       <div class="modal-actions" style="margin-top:0.85rem">
-        <button type="button" class="ghost" id="nt-cancel">Cancel</button>
-        <button type="button" class="primary vultr" id="nt-submit">Create ticket</button>
+        <button type="button" class="ghost" id="sp-n-cancel">Cancel</button>
+        <button type="button" class="primary" id="sp-n-submit">Create ticket</button>
       </div>
     </div>
   </div>
@@ -1477,6 +1693,7 @@
     </div>
   </div>
 
+  <script src="/support.js"></script>
   <script>
     const CONFIRM_SKIP_MS = 5 * 60 * 60 * 1000;
     const CONFIRM_WINDOW_KEY = "cpc_confirm_window_started";
@@ -2571,7 +2788,7 @@
       const diag = d._diag;
       if (!diag) return "";
       if (diag.state === "checking") {
-        const extra = provider === "vultr" ? " and linked tickets" : provider === "linode" ? " and maintenance" : "";
+        const extra = provider === "linode" ? ", maintenance, and linked tickets" : " and linked tickets";
         return '<div class="health-box checking"><div class="spinner"></div><span>Checking network reachability' + extra + "…</span></div>";
       }
       if (diag.state === "error") {
@@ -2614,37 +2831,17 @@
         html += "</div>";
       }
 
-      if (provider !== "vultr") return html;
-
-      const tickets = diag.tickets || [];
-      html +=
-        '<div class="linked-tickets"><h3><span>Linked Vultr tickets (' + tickets.length + ")</span>" +
-        '<button type="button" class="ghost" data-raise-ticket="1">Raise ticket</button></h3>';
-      if (diag.tickets_error) {
-        html += '<p class="resource-note">Could not load tickets: ' + esc(diag.tickets_error) + "</p>";
-      } else if (!tickets.length) {
-        html += '<p class="resource-note">No recent tickets reference this instance.</p>';
-      } else {
-        html += tickets.map((t) =>
-          '<div class="ticket-line" data-ticket-ref="' + esc(t.reference) + '">' +
-            '<span class="t-ref">' + esc(t.reference) + "</span>" +
-            ticketStatusPill(t.status) +
-            '<span class="t-subj" title="' + esc(t.subject) + '">' + esc(t.subject) + "</span>" +
-            '<span class="t-meta">' + esc(t.last_reply_name || "—") + " · " + esc(relativeTime(t.date_last_entry)) + "</span>" +
-          "</div>"
-        ).join("");
-      }
-      html += "</div>";
+      html += spRenderLinked(diag.support);
       return html;
     }
 
     let diagToken = 0;
-    let lastVultrServer = null;
+    let lastDiagServer = null;
 
     async function loadDiagnosis(ip, server, prov) {
       const token = ++diagToken;
       server._diag = { state: "checking" };
-      if (prov === "vultr") lastVultrServer = server;
+      lastDiagServer = server;
       if (provider === prov) renderServer(server);
       try {
         const res = await authFetch(PROVIDERS[prov].diagnosePath(ip));
@@ -2656,18 +2853,21 @@
             state: "done",
             health: data.health,
             probe: data.probe,
-            tickets: data.tickets,
-            tickets_error: data.tickets_error,
             maintenance: data.maintenance,
             maintenance_error: data.maintenance_error,
+            support: { state: "loading" },
           },
         });
-        if (prov === "vultr") lastVultrServer = next;
+        lastDiagServer = next;
         if (provider !== prov || currentIp() !== ip || providerOperationActive(prov)) return;
         renderServer(next);
         if (data.health && data.health.level === "down") {
           showStatus("err", data.health.label + ": " + data.health.message, prov);
         }
+        const support = await spLoadLinked(prov, ip, next.id);
+        if (token !== diagToken) return;
+        next._diag.support = support;
+        if (provider === prov && currentIp() === ip && !providerOperationActive(prov)) renderServer(next);
       } catch (err) {
         if (token !== diagToken) return;
         server._diag = { state: "error", error: err.message };
@@ -2678,30 +2878,15 @@
     facts.addEventListener("click", (e) => {
       const line = e.target.closest("[data-ticket-ref]");
       if (line) {
-        openTicket(line.dataset.ticketRef);
+        spOpenTicket(provider, line.dataset.ticketRef);
         return;
       }
       if (e.target.closest("[data-raise-ticket]")) {
-        const s = lastVultrServer || {};
-        const h = (s._diag && s._diag.health) || {};
-        const ip = s.ip || currentIp();
-        const down = h.level === "down";
-        openNewTicket({
-          ip,
-          subject: (down ? "Server down" : "Server issue") + " | " + ip + (s.region ? " | " + s.region : ""),
-          severity: down ? "S1" : "",
-          description:
-            "Hi team,\n\nPlease check the server below" + (down ? " — it is not reachable." : ".") + "\n\n" +
-            "IP: " + ip + "\n" +
-            (s.name ? "Instance: " + s.name + "\n" : "") +
-            (s.id ? "Instance ID: " + s.id + "\n" : "") +
-            (h.api ? h.api + "\n" : "") +
-            (s._diag && s._diag.probe
-              ? "Reachability from our monitor: " +
-                s._diag.probe.ports.map((p) => p.port + " " + (PORT_STATE_TEXT[p.state] || p.state)).join(", ") + "\n"
-              : "") +
-            "\nThanks,\nCloudways Team.",
-        });
+        spRaiseForServer(provider, lastDiagServer);
+        return;
+      }
+      if (e.target.closest("[data-view-tickets]")) {
+        showTicketsView();
       }
     });
 
@@ -2729,7 +2914,7 @@
       document.getElementById("kicker").className = "kicker";
       document.getElementById("title").textContent = "Operation log";
       document.getElementById("subtitle").textContent =
-        "Power cycle, stop, and start actions across DigitalOcean, Vultr, and Linode, plus Vultr tickets raised or replied to from Dropkick. Times shown in your local timezone (12-hour).";
+        "Power cycle, stop, and start actions across DigitalOcean, Vultr, and Linode, plus support tickets raised, replied to, or tracked from Dropkick. Times shown in your local timezone (12-hour).";
       updateTabUi();
     }
 
@@ -2737,10 +2922,11 @@
       tabBtns.forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.tab === activeTab);
       });
-      document.getElementById("tickets-tab").classList.toggle(
-        "hidden",
-        !enabled.vultr || (activeTab !== "vultr" && activeTab !== "tickets")
-      );
+      const ticketsTab = document.getElementById("tickets-tab");
+      const onProvider = Boolean(PROVIDERS[activeTab]) || activeTab === "tickets";
+      ticketsTab.classList.toggle("hidden", !onProvider || !enabled[provider]);
+      ticketsTab.textContent = PROVIDERS[provider].label + " tickets";
+      ticketsTab.dataset.support = provider;
       const adminBtn = document.getElementById("admin-btn");
       if (adminBtn) adminBtn.classList.toggle("active", activeTab === "admin");
     }
@@ -3209,344 +3395,6 @@
       lookupTimer = setTimeout(() => {
         if (prov === provider && !providerOperationActive(prov)) getServerStatus(prov).catch(() => {});
       }, 500);
-    });
-
-    const ticketsBody = document.getElementById("tickets-body");
-    const ticketsWrap = document.getElementById("tickets-wrap");
-    const ticketsEmpty = document.getElementById("tickets-empty");
-    const ticketsMeta = document.getElementById("tickets-meta");
-    const ticketsStatus = document.getElementById("tickets-status");
-    const ticketsSearch = document.getElementById("tickets-search");
-    const ticketBackdrop = document.getElementById("ticket-backdrop");
-    const newTicketBackdrop = document.getElementById("new-ticket-backdrop");
-    let ticketFilter = "open";
-    let ticketSearchTimer = null;
-    let ticketLoadToken = 0;
-    let openTicketRef = null;
-    let severityLoaded = false;
-
-    function setBoxStatus(el, kind, text) {
-      if (!text) {
-        el.className = "status";
-        el.textContent = "";
-        return;
-      }
-      el.className = "status show " + kind;
-      el.textContent = text;
-    }
-
-    function openOverlay(el) {
-      el.classList.add("show");
-      el.setAttribute("aria-hidden", "false");
-      document.body.classList.add("modal-open");
-    }
-
-    function closeOverlay(el) {
-      el.classList.remove("show");
-      el.setAttribute("aria-hidden", "true");
-      if (!document.querySelector(".modal-backdrop.show")) document.body.classList.remove("modal-open");
-    }
-
-    function showTicketsView() {
-      if (!enabled.vultr) return;
-      activeTab = "tickets";
-      hideAllViews();
-      ticketsView.classList.remove("hidden");
-      updateTabUi();
-      loadTickets().catch(() => {});
-    }
-
-    async function loadTickets(force) {
-      const token = ++ticketLoadToken;
-      const qs = new URLSearchParams({ filter: ticketFilter, q: ticketsSearch.value.trim() });
-      if (force) qs.set("refresh", "1");
-      if (!ticketsBody.children.length) {
-        ticketsEmpty.textContent = "Loading tickets…";
-        ticketsEmpty.classList.remove("hidden");
-      }
-      try {
-        const res = await authFetch("/api/vultr/tickets?" + qs);
-        const data = await res.json();
-        if (token !== ticketLoadToken) return;
-        if (!res.ok) throw new Error(data.error || "Could not load tickets");
-        setBoxStatus(ticketsStatus, "", "");
-        renderTickets(data);
-      } catch (err) {
-        if (token !== ticketLoadToken) return;
-        setBoxStatus(ticketsStatus, "err", err.message);
-        ticketsEmpty.textContent = "Could not load tickets.";
-        ticketsEmpty.classList.remove("hidden");
-      }
-    }
-
-    function renderTickets(data) {
-      const rows = data.tickets || [];
-      const counts = data.counts || {};
-      document.querySelectorAll("#tickets-filters [data-filter]").forEach((chip) => {
-        const f = chip.dataset.filter;
-        chip.classList.toggle("active", f === ticketFilter);
-        const base = chip.dataset.label || chip.textContent.replace(/\s*\(\d+\)$/, "");
-        chip.dataset.label = base;
-        chip.textContent = counts[f] != null ? base + " (" + counts[f] + ")" : base;
-      });
-
-      ticketsBody.innerHTML = rows.map((t) => {
-        const sub = (t.linked_subscriptions || [])[0];
-        return (
-          '<tr data-ticket-ref="' + esc(t.reference) + '">' +
-            '<td class="col-time"><strong>' + esc(t.reference) + "</strong></td>" +
-            '<td class="col-subj">' + esc(t.subject) +
-              (sub ? "<small>" + esc(sub.description || sub.uuid) + "</small>" : "") + "</td>" +
-            '<td><span class="t-sev ' + esc(t.severity) + '" title="' + esc(t.severity_label) + '">' + esc(t.severity || "—") + "</span></td>" +
-            "<td>" + ticketStatusPill(t.status) + "</td>" +
-            '<td class="col-time">' + esc(t.last_reply_name || "—") + "<br /><small>" + esc(relativeTime(t.date_last_entry)) + "</small></td>" +
-            "<td>" + esc(t.ticket_opener || "—") + "<br /><small class=\"health-api\">" + esc(formatLogTime(t.date_created)) + "</small></td>" +
-          "</tr>"
-        );
-      }).join("");
-
-      ticketsWrap.classList.toggle("hidden", !rows.length);
-      ticketsEmpty.classList.toggle("hidden", Boolean(rows.length));
-      if (!rows.length) ticketsEmpty.textContent = "No tickets match this filter.";
-
-      let line = "Showing " + rows.length + (data.matched > rows.length ? " of " + data.matched : "") +
-        " · indexed newest " + (data.scanned || 0) + " tickets";
-      if (data.account_total) line += " of " + data.account_total + " on the account";
-      if (data.fetched_at) line += " · updated " + relativeTime(data.fetched_at);
-      if (data.refreshing) line += " · refreshing…";
-      line += " · search a reference (e.g. ABC-12XYZ) to open older tickets";
-      if (data.error) line += " · last error: " + data.error;
-      ticketsMeta.textContent = line;
-    }
-
-    document.getElementById("tickets-filters").addEventListener("click", (e) => {
-      const chip = e.target.closest("[data-filter]");
-      if (!chip) return;
-      ticketFilter = chip.dataset.filter;
-      loadTickets().catch(() => {});
-    });
-
-    ticketsSearch.addEventListener("input", () => {
-      clearTimeout(ticketSearchTimer);
-      ticketSearchTimer = setTimeout(() => loadTickets().catch(() => {}), 300);
-    });
-
-    document.getElementById("tickets-refresh").addEventListener("click", () => loadTickets(true).catch(() => {}));
-    document.getElementById("tickets-new").addEventListener("click", () => openNewTicket({}));
-    ticketsBody.addEventListener("click", (e) => {
-      const row = e.target.closest("[data-ticket-ref]");
-      if (row) openTicket(row.dataset.ticketRef);
-    });
-
-    async function openTicket(reference) {
-      openTicketRef = reference;
-      document.getElementById("ticket-title").textContent = reference;
-      document.getElementById("ticket-meta").innerHTML = "";
-      document.getElementById("ticket-replies").innerHTML =
-        '<div class="health-box checking"><div class="spinner"></div><span>Loading conversation…</span></div>';
-      document.getElementById("ticket-reply-text").value = "";
-      document.getElementById("ticket-reply-wrap").classList.add("hidden");
-      document.getElementById("ticket-reply-send").classList.add("hidden");
-      setBoxStatus(document.getElementById("ticket-status"), "", "");
-      openOverlay(ticketBackdrop);
-
-      try {
-        const res = await authFetch("/api/vultr/tickets/" + encodeURIComponent(reference));
-        const data = await res.json();
-        if (openTicketRef !== reference) return;
-        if (!res.ok) throw new Error(data.error || "Could not load ticket");
-        renderTicketDetail(data);
-      } catch (err) {
-        if (openTicketRef !== reference) return;
-        document.getElementById("ticket-replies").innerHTML = "";
-        setBoxStatus(document.getElementById("ticket-status"), "err", err.message);
-      }
-    }
-
-    function renderTicketDetail(data) {
-      const t = data.ticket || {};
-      const status = String(t.status || "").toLowerCase();
-      document.getElementById("ticket-title").textContent = t.reference + " — " + (t.subject || "");
-      const subs = (t.linked_subscriptions || []).map((s) => esc(s.description || s.uuid)).join("<br />");
-      document.getElementById("ticket-meta").innerHTML =
-        "<span>Status " + ticketStatusPill(t.status) + "</span>" +
-        (t.severity ? '<span>Severity <strong class="t-sev ' + esc(t.severity) + '">' + esc(t.severity + " " + (t.severity_label || "")) + "</strong></span>" : "") +
-        "<span>Opened by <strong>" + esc(t.ticket_opener || "—") + "</strong> · " + esc(formatLogTime(t.date_created)) + "</span>" +
-        (subs ? '<span style="flex-basis:100%">Linked: <strong>' + subs + "</strong></span>" : "");
-
-      const replies = data.replies || [];
-      document.getElementById("ticket-replies").innerHTML = replies.length
-        ? replies.map((r) =>
-            '<div class="reply ' + esc(r.from_type === "staff" ? "staff" : "user") + '">' +
-              '<div class="reply-head"><span><strong>' + esc(r.from_name || "—") + "</strong>" +
-                (r.from_type === "staff" ? " · Vultr" : "") + "</span><span>" + esc(formatLogTime(r.date)) + "</span></div>" +
-              '<div class="reply-body">' + esc(String(r.description || "").replace(/\r\n/g, "\n").trim()) + "</div>" +
-              (r.attachments && r.attachments.length
-                ? '<div class="reply-files">Attachments: ' + r.attachments.map((a) => esc(a.filename)).join(", ") + "</div>"
-                : "") +
-            "</div>"
-          ).join("")
-        : '<p class="resource-note">No replies yet.</p>';
-
-      const canReply = status !== "archived";
-      document.getElementById("ticket-reply-wrap").classList.toggle("hidden", !canReply);
-      document.getElementById("ticket-reply-send").classList.toggle("hidden", !canReply);
-      if (!canReply) {
-        setBoxStatus(document.getElementById("ticket-status"), "warn", "This ticket is archived and can no longer be changed. Raise a new ticket instead.");
-      }
-      const scroller = document.getElementById("ticket-replies");
-      scroller.scrollTop = scroller.scrollHeight;
-    }
-
-    document.getElementById("ticket-close").addEventListener("click", () => {
-      openTicketRef = null;
-      closeOverlay(ticketBackdrop);
-    });
-
-    document.getElementById("ticket-reply-send").addEventListener("click", async () => {
-      const ref = openTicketRef;
-      const textEl = document.getElementById("ticket-reply-text");
-      const statusBox = document.getElementById("ticket-status");
-      const text = textEl.value.trim();
-      if (!ref) return;
-      if (!text) {
-        setBoxStatus(statusBox, "err", "Write a reply first.");
-        return;
-      }
-      const ok = await confirmAction({
-        title: "Send reply to Vultr?",
-        html: "This reply is posted to <strong>" + esc(ref) + "</strong> and visible to Vultr support.",
-        confirmLabel: "Send reply",
-      });
-      if (!ok) return;
-      const btn = document.getElementById("ticket-reply-send");
-      btn.disabled = true;
-      setBoxStatus(statusBox, "info", "Sending reply…");
-      try {
-        const res = await authFetch("/api/vultr/tickets/" + encodeURIComponent(ref) + "/replies", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ description: text }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Reply failed");
-        textEl.value = "";
-        setBoxStatus(statusBox, "ok", "Reply sent.");
-        showToast("ok", "Reply sent", ref, "vultr");
-        await openTicket(ref);
-        setBoxStatus(statusBox, "ok", "Reply sent.");
-        if (activeTab === "tickets") loadTickets().catch(() => {});
-      } catch (err) {
-        setBoxStatus(statusBox, "err", err.message);
-      } finally {
-        btn.disabled = false;
-      }
-    });
-
-    async function loadSeverityOptions() {
-      if (severityLoaded) return;
-      const select = document.getElementById("nt-severity");
-      try {
-        const res = await authFetch("/api/vultr/tickets/severity-options");
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "");
-        const current = select.value;
-        select.innerHTML = '<option value="">Not set</option>' +
-          (data.severity || []).map((s) =>
-            '<option value="' + esc(s.value) + '" data-desc="' + esc(s.description || "") + '">' +
-            esc(s.value + " — " + s.label) + "</option>"
-          ).join("");
-        select.value = current;
-        severityLoaded = true;
-        updateSeverityHint();
-      } catch (_) {}
-    }
-
-    function updateSeverityHint() {
-      const select = document.getElementById("nt-severity");
-      const opt = select.options[select.selectedIndex];
-      document.getElementById("nt-severity-hint").textContent = (opt && opt.dataset.desc) || "";
-    }
-
-    document.getElementById("nt-severity").addEventListener("change", updateSeverityHint);
-
-    async function openNewTicket(prefill) {
-      const p = prefill || {};
-      document.getElementById("nt-ip").value = p.ip || "";
-      document.getElementById("nt-subject").value = p.subject || "";
-      document.getElementById("nt-description").value = p.description || "Hi team,\n\n\n\nThanks,\nCloudways Team.";
-      setBoxStatus(document.getElementById("nt-status"), "", "");
-      openOverlay(newTicketBackdrop);
-      await loadSeverityOptions();
-      document.getElementById("nt-severity").value = p.severity || "";
-      updateSeverityHint();
-      document.getElementById(p.subject ? "nt-description" : "nt-subject").focus();
-    }
-
-    document.getElementById("nt-cancel").addEventListener("click", () => closeOverlay(newTicketBackdrop));
-
-    document.getElementById("nt-submit").addEventListener("click", async () => {
-      const statusBox = document.getElementById("nt-status");
-      const ip = document.getElementById("nt-ip").value.trim();
-      const subject = document.getElementById("nt-subject").value.trim();
-      const severity = document.getElementById("nt-severity").value;
-      const description = document.getElementById("nt-description").value.trim();
-      if (!subject || !description) {
-        setBoxStatus(statusBox, "err", "Subject and description are required.");
-        return;
-      }
-      const ok = await confirmAction({
-        title: "Create Vultr ticket?",
-        html:
-          "A real support ticket will be opened with Vultr on the shared account.<br /><br />" +
-          "<strong>" + esc(subject) + "</strong>" +
-          (ip ? "<br />Linked server: <code>" + esc(ip) + "</code>" : "<br />Not linked to a server") +
-          (severity ? "<br />Severity: " + esc(severity) : ""),
-        confirmLabel: "Create ticket",
-      });
-      if (!ok) return;
-      const btn = document.getElementById("nt-submit");
-      btn.disabled = true;
-      setBoxStatus(statusBox, "info", "Creating ticket…");
-      try {
-        const res = await authFetch("/api/vultr/tickets", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ip, subject, severity, description }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Could not create ticket");
-        closeOverlay(newTicketBackdrop);
-        showToast("ok", "Ticket created", (data.reference || "Vultr ticket") + " — " + subject, "vultr");
-        loadLogs().catch(() => {});
-        if (activeTab === "tickets") loadTickets().catch(() => {});
-        if (provider === "vultr" && ip && currentIp() === ip && activeTab === "vultr") {
-          loadServerCard(ip, "vultr").catch(() => {});
-        }
-        if (data.reference) openTicket(data.reference);
-      } catch (err) {
-        setBoxStatus(statusBox, "err", err.message);
-      } finally {
-        btn.disabled = false;
-      }
-    });
-
-    [ticketBackdrop, newTicketBackdrop].forEach((el) => {
-      el.addEventListener("click", (e) => {
-        if (e.target === el) {
-          if (el === ticketBackdrop) openTicketRef = null;
-          closeOverlay(el);
-        }
-      });
-    });
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape" || modalBackdrop.classList.contains("show")) return;
-      if (newTicketBackdrop.classList.contains("show")) closeOverlay(newTicketBackdrop);
-      else if (ticketBackdrop.classList.contains("show")) {
-        openTicketRef = null;
-        closeOverlay(ticketBackdrop);
-      }
     });
 
     initConfirmWindow();
