@@ -2788,7 +2788,7 @@
       const diag = d._diag;
       if (!diag) return "";
       if (diag.state === "checking") {
-        const extra = provider === "linode" ? ", maintenance, and linked tickets" : " and linked tickets";
+        const extra = provider === "linode" ? ", maintenance, and linked tickets" : spSupported(provider) ? " and linked tickets" : "";
         return '<div class="health-box checking"><div class="spinner"></div><span>Checking network reachability' + extra + "…</span></div>";
       }
       if (diag.state === "error") {
@@ -2831,7 +2831,7 @@
         html += "</div>";
       }
 
-      html += spRenderLinked(diag.support);
+      if (spSupported(provider)) html += spRenderLinked(diag.support);
       return html;
     }
 
@@ -2864,6 +2864,7 @@
         if (data.health && data.health.level === "down") {
           showStatus("err", data.health.label + ": " + data.health.message, prov);
         }
+        if (!spSupported(prov)) return;
         const support = await spLoadLinked(prov, ip, next.id);
         if (token !== diagToken) return;
         next._diag.support = support;
@@ -2924,7 +2925,7 @@
       });
       const ticketsTab = document.getElementById("tickets-tab");
       const onProvider = Boolean(PROVIDERS[activeTab]) || activeTab === "tickets";
-      ticketsTab.classList.toggle("hidden", !onProvider || !enabled[provider]);
+      ticketsTab.classList.toggle("hidden", !onProvider || !enabled[provider] || !spSupported(provider));
       ticketsTab.textContent = PROVIDERS[provider].label + " tickets";
       ticketsTab.dataset.support = provider;
       const adminBtn = document.getElementById("admin-btn");

@@ -50,19 +50,18 @@ Large accounts: droplet IPs are indexed in the background; type a name or IP to 
 | `POST` | `/api/support/:provider/tickets/:reference/replies` | Body `{ "description" }` (a note on tracked tickets) |
 | `PATCH` | `/api/support/:provider/tickets/:reference` | Body `{ "action": "close"\|"resolve" }`, or for tracked tickets `{ "status", "reference" }` |
 
-`:provider` is `digitalocean`, `vultr`, or `linode`.
+`:provider` is `vultr` or `linode`. DigitalOcean has no ticket API, so it has no tickets option.
 
 ## Health checks and tickets
 
 No provider API reports a failed host node — DigitalOcean says `active`, Linode `running`, Vultr `active / running / ok`. On every lookup Dropkick also opens TCP connections to ports 22, 80, and 443 from its own server. If none answer, the server is shown as **Unreachable** even though the API says running, and power cycle / start only report success once the server answers again (up to 4 minutes, then "not reachable"). Linode servers also show scheduled or in-progress platform maintenance from `/account/maintenance`.
 
-Each provider has a **tickets** tab (shown next to its server tab) and a tickets section in the server panel:
+Vultr and Linode each have a **tickets** tab (shown next to its server tab) and a tickets section in the server panel:
 
 | Provider | Mode | What works |
 |----------|------|------------|
 | Vultr | Live API | List, search, read, reply, resolve, close, raise |
-| Linode | Live API when `LINODE_SUPPORT_TOKEN` (or `LINODE_API_TOKEN`) has **Account: Read/Write** | List, search, read, reply, close, raise. Without that scope, Linode falls back to tracked mode and shows the setup steps |
-| DigitalOcean | Tracked (no ticket API) | Dropkick saves the ticket, copies the text, opens the DigitalOcean support portal, and tracks the provider ticket number, status, and notes |
+| Linode | Live API when `LINODE_SUPPORT_TOKEN` (or `LINODE_API_TOKEN`) has **Account: Read/Write** | List, search, read, reply, close, raise. Without that scope, Linode falls back to tracked mode: Dropkick saves the ticket, copies the text, opens the Linode portal, and tracks the ticket number, status, and notes, with setup steps shown |
 
 Raising a ticket checks the server first (health, port check, maintenance), warns about open tickets already linked to it, offers issue templates with a matching severity, and can append the live diagnostics to the description. Tracked tickets are stored in MySQL (`tracked_tickets`, `tracked_ticket_events`). Every ticket action is recorded in the operation log.
 

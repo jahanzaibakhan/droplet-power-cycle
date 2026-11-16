@@ -82,6 +82,9 @@ const SP_QUICK_TRACKED = [
   "Issue resolved by the provider.",
 ];
 
+const SP_PROVIDERS = ["vultr", "linode"];
+const spSupported = (prov) => SP_PROVIDERS.includes(prov);
+
 const spEl = (id) => document.getElementById(id);
 
 function spSetStatus(el, kind, text) {
@@ -165,7 +168,7 @@ function spRefCell(t) {
 
 function showTicketsView() {
   const prov = provider;
-  if (!enabled[prov]) return;
+  if (!enabled[prov] || !spSupported(prov)) return;
   SP.provider = prov;
   activeTab = "tickets";
   hideAllViews();
@@ -623,7 +626,7 @@ function spRaiseForServer(prov, server) {
 function spServerSummary(prov, s) {
   if (!s) return "";
   const lines = ["IP: " + (s.ip || "—")];
-  if (s.name) lines.push((prov === "digitalocean" ? "Droplet: " : prov === "linode" ? "Linode: " : "Instance: ") + s.name);
+  if (s.name) lines.push((prov === "linode" ? "Linode: " : "Instance: ") + s.name);
   if (s.id) lines.push("ID: " + s.id);
   if (s.region) lines.push("Region: " + s.region);
   if (s.size) lines.push("Plan: " + s.size);

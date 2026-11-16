@@ -13,11 +13,6 @@ const GROUP_FILTERS = {
 };
 
 const TEMPLATE_PORTALS = {
-  digitalocean: {
-    label: "DigitalOcean",
-    new_ticket_url: "https://cloudsupport.digitalocean.com/s/createticket",
-    portal_url: "https://cloudsupport.digitalocean.com/s/",
-  },
   linode: {
     label: "Linode",
     new_ticket_url: "https://cloud.linode.com/support/tickets",
@@ -363,7 +358,7 @@ function linodeApiAdapter(support) {
   };
 }
 
-function createSupportRouter({ vultr, linode, linodeSupport, resolveDroplet, operationLogs, opUser, parseIp, IPV4 }) {
+function createSupportRouter({ vultr, linode, linodeSupport, operationLogs, opUser, parseIp, IPV4 }) {
   const router = express.Router();
 
   const linodeSetup = async () => {
@@ -380,11 +375,6 @@ function createSupportRouter({ vultr, linode, linodeSupport, resolveDroplet, ope
   };
 
   const adapters = {};
-  if (resolveDroplet) {
-    adapters.digitalocean = trackedAdapter("digitalocean", {
-      resolveResource: async (ip) => resolveDroplet(ip),
-    });
-  }
   if (vultr) adapters.vultr = vultrAdapter(vultr);
   const linodeTracked = linode
     ? trackedAdapter("linode", { resolveResource: async (ip) => linode.resolveByIp(ip), setup: linodeSetup })

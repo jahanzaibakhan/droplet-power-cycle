@@ -954,7 +954,6 @@ app.use(
     vultr,
     linode,
     linodeSupport,
-    resolveDroplet: HAS_DO ? resolveDropletByIp : null,
     operationLogs,
     opUser,
     parseIp,
