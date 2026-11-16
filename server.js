@@ -8,6 +8,7 @@ const express = require("express");
 const { createVultrProvider } = require("./providers/vultr");
 const { createLinodeProvider } = require("./providers/linode");
 const operationLogs = require("./lib/operationLogs");
+const { probeHost } = require("./lib/reachability");
 const db = require("./lib/db");
 const { attachUser, requireAuth, requireAdmin } = require("./middleware/auth");
 const authRoutes = require("./routes/auth");
@@ -722,7 +723,140 @@ if (vultr) {
         return res.status(400).json({ error: "Missing instance_id query parameter." });
       }
       const live = await vultr.fetchInstanceById(instanceId);
-      res.json(vultr.getActionStatus(action, live, startedAt));
+      const probe =
+        live.main_ip && vultr.needsReachabilityCheck(action, live, startedAt)
+          ? await probeHost(live.main_ip)
+          : null;
+      res.json(vultr.getActionStatus(action, live, startedAt, probe));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get("/api/vultr/diagnose", async (req, res, next) => {
+    try {
+      const ip = parseIp(req.query.ip);
+      if (!ip || !IPV4.test(ip)) {
+        return res.status(400).json({ error: "Pass a valid ?ip= public IPv4 address." });
+      }
+      const found = await vultr.resolveByIp(ip);
+      if (!found) {
+        return res.status(404).json({ error: `No Vultr instance found with public IPv4 ${ip}.` });
+      }
+      const [live, probe, linked] = await Promise.all([
+        vultr.fetchInstanceById(found.id),
+        probeHost(ip),
+        vultr.ticketsForInstance(found.id, ip),
+      ]);
+      res.json({
+        instance: vultr.summarize(live, ip),
+        probe,
+        health: vultr.assessHealth(live, probe, linked.tickets),
+        tickets: linked.tickets,
+        tickets_error: linked.error,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get("/api/vultr/tickets", async (req, res, next) => {
+    try {
+      const filter = String(req.query.filter || "open").toLowerCase();
+      const q = String(req.query.q || "").slice(0, 120);
+      const force = req.query.refresh === "1";
+      res.json(await vultr.listTickets({ filter, q, force }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get("/api/vultr/tickets/severity-options", async (_req, res, next) => {
+    try {
+      res.json(await vultr.getSeverityOptions());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get("/api/vultr/tickets/:reference", async (req, res, next) => {
+    try {
+      res.json(await vultr.getTicket(req.params.reference));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  const TICKET_CATEGORIES = ["General Support", "Account Cancellation", "Billing Questions", "Marketplace", "API v2"];
+
+  app.post("/api/vultr/tickets", async (req, res, next) => {
+    try {
+      const body = req.body || {};
+      const subject = String(body.subject || "").trim();
+      const description = String(body.description || "").trim();
+      const severity = String(body.severity || "").trim().toUpperCase();
+      const category = String(body.category || "").trim();
+      const ip = parseIp(body.ip);
+
+      if (!subject || subject.length > 250) {
+        return res.status(400).json({ error: "Subject is required (max 250 characters)." });
+      }
+      if (!description || description.length > 20000) {
+        return res.status(400).json({ error: "Description is required (max 20,000 characters)." });
+      }
+      if (severity && !/^S[1-4]$/.test(severity)) {
+        return res.status(400).json({ error: "Severity must be S1, S2, S3, or S4." });
+      }
+      if (category && !TICKET_CATEGORIES.includes(category)) {
+        return res.status(400).json({ error: "Unknown ticket category." });
+      }
+
+      let subUuid = null;
+      let instanceName = null;
+      if (ip) {
+        if (!IPV4.test(ip)) {
+          return res.status(400).json({ error: `"${ip}" is not a valid IPv4 address.` });
+        }
+        const found = await vultr.resolveByIp(ip);
+        if (!found) {
+          return res.status(404).json({
+            error: `No Vultr instance found with public IPv4 ${ip}. Clear the server field to raise an unlinked ticket.`,
+          });
+        }
+        subUuid = found.id;
+        instanceName = found.name;
+      }
+
+      const result = await vultr.createTicket({ subject, description, severity, subUuid, category });
+      const reference = (result.ticket && result.ticket.reference) || result.raw_reference;
+      operationLogs.appendLog({
+        provider: "vultr",
+        upstream: `${reference || "ticket"} · ${subject}`.slice(0, 250),
+        ip: ip || null,
+        operation: "ticket_create",
+        ...opUser(req),
+      });
+      res.status(201).json({ ok: true, reference, ticket: result.ticket, instance_name: instanceName });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post("/api/vultr/tickets/:reference/replies", async (req, res, next) => {
+    try {
+      const description = String((req.body && req.body.description) || "").trim();
+      if (!description || description.length > 20000) {
+        return res.status(400).json({ error: "Reply text is required (max 20,000 characters)." });
+      }
+      const result = await vultr.replyTicket(req.params.reference, description);
+      operationLogs.appendLog({
+        provider: "vultr",
+        upstream: `${result.reference} · reply`,
+        ip: null,
+        operation: "ticket_reply",
+        ...opUser(req),
+      });
+      res.status(201).json(result);
     } catch (err) {
       next(err);
     }
@@ -881,7 +1015,10 @@ async function start() {
     setInterval(() => refreshCache().catch(() => {}), CACHE_TTL_MS).unref();
   }
 
-  if (vultr) vultr.startBackgroundRefresh();
+  if (vultr) {
+    vultr.startBackgroundRefresh();
+    vultr.startTicketRefresh();
+  }
   if (linode) linode.startBackgroundRefresh();
 }
 
