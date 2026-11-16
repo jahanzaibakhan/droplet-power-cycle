@@ -2703,6 +2703,10 @@
       tabBtns.forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.tab === activeTab);
       });
+      document.getElementById("tickets-tab").classList.toggle(
+        "hidden",
+        !enabled.vultr || (activeTab !== "vultr" && activeTab !== "tickets")
+      );
       const adminBtn = document.getElementById("admin-btn");
       if (adminBtn) adminBtn.classList.toggle("active", activeTab === "admin");
     }
@@ -3537,7 +3541,6 @@
           if (!enabled[provider]) {
             provider = firstEnabledProvider();
           }
-          document.getElementById("tickets-tab").classList.toggle("hidden", !enabled.vultr);
         }
         if (currentUser.role === "admin") {
           await populateLogsUserFilter();
