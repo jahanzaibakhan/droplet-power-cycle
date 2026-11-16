@@ -1536,6 +1536,7 @@
           "?droplet_id=" + encodeURIComponent(ctx.resourceId) + "&t=" + Date.now(),
         parseInstance: (data) => data.droplet,
         parseList: (data) => data.droplets || [],
+        diagnosePath: (ip) => "/api/droplet/diagnose?ip=" + encodeURIComponent(ip),
         metaIndexing: "indexing DigitalOcean",
       },
       vultr: {
@@ -1554,6 +1555,7 @@
           "&started_at=" + encodeURIComponent(ctx.startedAt) + "&t=" + Date.now(),
         parseInstance: (data) => data.instance,
         parseList: (data) => data.instances || [],
+        diagnosePath: (ip) => "/api/vultr/diagnose?ip=" + encodeURIComponent(ip),
         metaIndexing: "indexing Vultr",
       },
       linode: {
@@ -1572,6 +1574,7 @@
           "&started_at=" + encodeURIComponent(ctx.startedAt) + "&t=" + Date.now(),
         parseInstance: (data) => data.instance,
         parseList: (data) => data.instances || [],
+        diagnosePath: (ip) => "/api/linode/diagnose?ip=" + encodeURIComponent(ip),
         metaIndexing: "indexing Linode",
       },
     };
@@ -2513,7 +2516,7 @@
           '<div class="server-head-meta">' + statusPill(d) + "</div>" +
         "</div>";
 
-      if (provider === "vultr") html += renderDiagnosis(d);
+      html += renderDiagnosis(d);
 
       if (hasResources) {
         html +=
@@ -2568,7 +2571,8 @@
       const diag = d._diag;
       if (!diag) return "";
       if (diag.state === "checking") {
-        return '<div class="health-box checking"><div class="spinner"></div><span>Checking network reachability and linked tickets…</span></div>';
+        const extra = provider === "vultr" ? " and linked tickets" : provider === "linode" ? " and maintenance" : "";
+        return '<div class="health-box checking"><div class="spinner"></div><span>Checking network reachability' + extra + "…</span></div>";
       }
       if (diag.state === "error") {
         return '<div class="health-box warn"><div class="health-label">Health check failed</div><p class="health-msg">' + esc(diag.error) + "</p></div>";
@@ -2589,6 +2593,28 @@
           '<span class="port-chip">checked ' + esc(relativeTime(probe.checked_at)) + "</span>" +
           "</div>" +
         "</div>";
+
+      if (provider === "linode") {
+        const items = diag.maintenance || [];
+        html += '<div class="linked-tickets"><h3><span>Active Linode maintenance (' + items.length + ")</span></h3>";
+        if (diag.maintenance_error) {
+          html += '<p class="resource-note">Could not load maintenance: ' + esc(diag.maintenance_error) + "</p>";
+        } else if (!items.length) {
+          html += '<p class="resource-note">No scheduled or in-progress maintenance for this Linode.</p>';
+        } else {
+          html += items.map((m) =>
+            '<div class="ticket-line" style="cursor:default">' +
+              '<span class="t-ref">' + esc(m.type) + "</span>" +
+              ticketStatusPill(m.status) +
+              '<span class="t-subj" title="' + esc(m.reason) + '">' + esc(m.reason || "Platform maintenance") + "</span>" +
+              '<span class="t-meta">' + esc(m.when ? formatLogTime(m.when) : "—") + "</span>" +
+            "</div>"
+          ).join("");
+        }
+        html += "</div>";
+      }
+
+      if (provider !== "vultr") return html;
 
       const tickets = diag.tickets || [];
       html +=
@@ -2615,29 +2641,37 @@
     let diagToken = 0;
     let lastVultrServer = null;
 
-    async function loadVultrDiagnosis(ip, server) {
+    async function loadDiagnosis(ip, server, prov) {
       const token = ++diagToken;
       server._diag = { state: "checking" };
-      lastVultrServer = server;
-      if (provider === "vultr") renderServer(server);
+      if (prov === "vultr") lastVultrServer = server;
+      if (provider === prov) renderServer(server);
       try {
-        const res = await authFetch("/api/vultr/diagnose?ip=" + encodeURIComponent(ip));
+        const res = await authFetch(PROVIDERS[prov].diagnosePath(ip));
         const data = await res.json();
         if (token !== diagToken) return;
         if (!res.ok) throw new Error(data.error || "Health check failed");
         const next = Object.assign({}, data.instance, {
-          _diag: { state: "done", health: data.health, probe: data.probe, tickets: data.tickets, tickets_error: data.tickets_error },
+          _diag: {
+            state: "done",
+            health: data.health,
+            probe: data.probe,
+            tickets: data.tickets,
+            tickets_error: data.tickets_error,
+            maintenance: data.maintenance,
+            maintenance_error: data.maintenance_error,
+          },
         });
-        lastVultrServer = next;
-        if (provider !== "vultr" || currentIp() !== ip || providerOperationActive("vultr")) return;
+        if (prov === "vultr") lastVultrServer = next;
+        if (provider !== prov || currentIp() !== ip || providerOperationActive(prov)) return;
         renderServer(next);
         if (data.health && data.health.level === "down") {
-          showStatus("err", data.health.label + ": " + data.health.message, "vultr");
+          showStatus("err", data.health.label + ": " + data.health.message, prov);
         }
       } catch (err) {
         if (token !== diagToken) return;
         server._diag = { state: "error", error: err.message };
-        if (provider === "vultr" && currentIp() === ip) renderServer(server);
+        if (provider === prov && currentIp() === ip) renderServer(server);
       }
     }
 
@@ -2903,8 +2937,8 @@
         const server = c.parseInstance(data);
         renderServer(server);
         if (!providerOperationActive(p)) hideStatus(p);
-        if (p === "vultr" && server && !providerOperationActive(p)) {
-          loadVultrDiagnosis(ip, server).catch(() => {});
+        if (server && c.diagnosePath && !providerOperationActive(p)) {
+          loadDiagnosis(ip, server, p).catch(() => {});
         }
       } catch (err) {
         if (p !== provider) return;
@@ -2921,13 +2955,13 @@
       if (isInst) {
         if (status === "completed") return "completed";
         if (status === "unreachable") return "unreachable";
-        const maxMs = kind === "power_cycle" ? 300000 : prov === "vultr" ? 300000 : 180000;
+        const maxMs = 300000;
         if (Date.now() - startedAt > maxMs) return "timeout";
         return null;
       }
       const dropletStatus = String(data.droplet_status || "").toLowerCase();
-      if (status === "completed" || status === "errored") return status;
-      if (Date.now() - startedAt < 8000) return null;
+      if (status === "completed" || status === "errored" || status === "unreachable") return status;
+      if (Date.now() - startedAt < 8000 || data.reachable === false) return null;
       if ((kind === "power_cycle" || kind === "start") && dropletStatus === "active") return "completed";
       if (kind === "stop" && dropletStatus === "off") return "completed";
       return null;
@@ -2942,7 +2976,11 @@
         if (data.note) line += "\n" + data.note;
         return line;
       }
-      return "droplet: " + (data.droplet_status || "?");
+      let line = "droplet: " + (data.droplet_status || "?");
+      if (data.reachable === true) line += " · network: answering (" + (data.open_ports || []).join(", ") + ")";
+      else if (data.reachable === false) line += " · network: not answering";
+      if (data.note) line += "\n" + data.note;
+      return line;
     }
 
     async function pollProviderOperation(prov, kind, ctx, name, ip, startedAt) {

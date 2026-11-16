@@ -8,7 +8,7 @@ const express = require("express");
 const { createVultrProvider } = require("./providers/vultr");
 const { createLinodeProvider } = require("./providers/linode");
 const operationLogs = require("./lib/operationLogs");
-const { probeHost } = require("./lib/reachability");
+const { probeHost, settleWithReachability, unreachableMessage } = require("./lib/reachability");
 const db = require("./lib/db");
 const { attachUser, requireAuth, requireAdmin } = require("./middleware/auth");
 const authRoutes = require("./routes/auth");
@@ -366,6 +366,38 @@ function summarizeDroplet(droplet, fallbackIp) {
     disk: droplet.disk || null,
     ip: fallbackIp || ips[0] || null,
     ips,
+    locked: Boolean(droplet.locked),
+  };
+}
+
+function assessDropletHealth(droplet, probe) {
+  const status = String(droplet.status || "").toLowerCase();
+  const api = `API: status ${status || "?"}${droplet.locked ? " · locked" : ""}`;
+  if (status === "new") {
+    return { level: "info", label: "Provisioning", message: "DigitalOcean is still creating this droplet.", api };
+  }
+  if (status === "archive") {
+    return { level: "down", label: "Archived", message: "This droplet is archived on DigitalOcean.", api };
+  }
+  if (status === "off") {
+    return { level: "stopped", label: "Stopped", message: "The droplet is powered off. Use Start to boot it.", api };
+  }
+  if (droplet.locked) {
+    return {
+      level: "warn",
+      label: "Locked",
+      message: "DigitalOcean has locked this droplet, usually while another action is running. New actions may be rejected.",
+      api,
+    };
+  }
+  if (status === "active" && probe && !probe.reachable) {
+    return { level: "down", label: "Unreachable", message: unreachableMessage(probe, "DigitalOcean"), api };
+  }
+  return {
+    level: "ok",
+    label: "Healthy",
+    message: "DigitalOcean reports the droplet active and it answers on the network.",
+    api,
   };
 }
 
@@ -596,6 +628,30 @@ app.get("/api/droplet", async (req, res, next) => {
   }
 });
 
+app.get("/api/droplet/diagnose", async (req, res, next) => {
+  if (!HAS_DO) {
+    return res.status(503).json({ error: "DigitalOcean is not configured on this server." });
+  }
+  try {
+    const ip = parseIp(req.query.ip);
+    if (!ip || !IPV4.test(ip)) {
+      return res.status(400).json({ error: "Pass a valid ?ip= public IPv4 address." });
+    }
+    const found = await resolveDropletByIp(ip);
+    if (!found) {
+      return res.status(404).json({ error: `No droplet found with public IPv4 ${ip}.` });
+    }
+    const [live, probe] = await Promise.all([fetchDropletById(found.id), probeHost(ip)]);
+    res.json({
+      instance: summarizeDroplet(live, ip),
+      probe,
+      health: assessDropletHealth(live, probe),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.post("/api/reboot", (req, res, next) => runDropletAction(req, res, next, "power_cycle"));
 app.post("/api/action", (req, res, next) => runDropletAction(req, res, next, req.body && req.body.action));
 
@@ -628,18 +684,34 @@ app.get("/api/action-status/:actionId", async (req, res, next) => {
 
     let dropletStatus = null;
     let dropletName = null;
+    let dropletIp = null;
     try {
       const live = await fetchDropletById(dropletId);
       dropletStatus = live.status;
       dropletName = live.name;
+      dropletIp = publicIPv4s(live)[0] || null;
     } catch (_) {}
+
+    let status = normalizeActionStatus(action.status);
+    let probe = null;
+    let note = null;
+    const bootsServer = action.type === "power_cycle" || action.type === "power_on";
+    if (status === "completed" && bootsServer && dropletIp) {
+      probe = await probeHost(dropletIp);
+      const startedMs = action.started_at ? Date.parse(action.started_at) : NaN;
+      const elapsedMs = Number.isFinite(startedMs) ? Date.now() - startedMs : Infinity;
+      ({ status, note } = settleWithReachability({ apiComplete: true, elapsedMs, probe }));
+    }
 
     res.json({
       action_id: action.id || Number(actionId),
       droplet_id: action.resource_id || Number(dropletId),
       droplet_name: dropletName,
       droplet_status: dropletStatus,
-      status: normalizeActionStatus(action.status),
+      reachable: probe ? probe.reachable : null,
+      open_ports: probe ? probe.open_ports : null,
+      note,
+      status,
       type: action.type,
       started_at: action.started_at,
       completed_at: action.completed_at,
@@ -937,7 +1009,36 @@ if (linode) {
         return res.status(400).json({ error: "Missing instance_id query parameter." });
       }
       const live = await linode.fetchInstanceById(instanceId);
-      res.json(linode.getActionStatus(action, live, startedAt));
+      const ip = (live.ipv4 || []).find((a) => a && !String(a).startsWith("192.168.")) || null;
+      const probe = ip && linode.needsReachabilityCheck(action, live, startedAt) ? await probeHost(ip) : null;
+      res.json(linode.getActionStatus(action, live, startedAt, probe));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get("/api/linode/diagnose", async (req, res, next) => {
+    try {
+      const ip = parseIp(req.query.ip);
+      if (!ip || !IPV4.test(ip)) {
+        return res.status(400).json({ error: "Pass a valid ?ip= public IPv4 address." });
+      }
+      const found = await linode.resolveByIp(ip);
+      if (!found) {
+        return res.status(404).json({ error: `No Linode found with public IPv4 ${ip}.` });
+      }
+      const [live, probe, maint] = await Promise.all([
+        linode.fetchInstanceById(found.id),
+        probeHost(ip),
+        linode.maintenanceFor(found.id),
+      ]);
+      res.json({
+        instance: linode.summarize(live, ip),
+        probe,
+        health: linode.assessHealth(live, probe, maint.items),
+        maintenance: maint.items,
+        maintenance_error: maint.error,
+      });
     } catch (err) {
       next(err);
     }
@@ -1019,7 +1120,10 @@ async function start() {
     vultr.startBackgroundRefresh();
     vultr.startTicketRefresh();
   }
-  if (linode) linode.startBackgroundRefresh();
+  if (linode) {
+    linode.startBackgroundRefresh();
+    linode.startMaintenanceRefresh();
+  }
 }
 
 start();

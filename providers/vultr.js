@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { settleWithReachability, unreachableMessage } = require("../lib/reachability");
 
 const VULTR_API = "https://api.vultr.com/v2";
 const PER_PAGE = 500;
@@ -10,7 +11,6 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const TICKET_PAGES = 2;
 const TICKET_TTL_MS = 3 * 60 * 1000;
 const TICKET_REF = /^[A-Z0-9]{2,6}-[A-Z0-9]{3,8}$/;
-const REACHABILITY_WAIT_MS = 4 * 60 * 1000;
 
 const ACTION_TYPES = {
   power_cycle: { path: (id) => `/instances/${id}/reboot`, method: "POST", label: "power cycle" },
@@ -351,10 +351,7 @@ function createVultrProvider(token) {
     } else if (probe && !probe.reachable) {
       level = "down";
       label = "Unreachable";
-      message =
-        "Vultr reports the instance as running, but it is not answering on ports " +
-        probe.ports.map((p) => p.port).join(", ") +
-        ". This usually points to a host node, network, or OS-level failure that the Vultr API does not expose.";
+      message = unreachableMessage(probe, "Vultr");
     } else if (server && server !== "ok") {
       level = "warn";
       label = "Degraded";
@@ -419,21 +416,7 @@ function createVultrProvider(token) {
   function getActionStatus(action, instance, startedAt, probe) {
     const elapsed = Date.now() - startedAt;
     const apiComplete = actionComplete(action, instance, elapsed);
-    let status = apiComplete ? "completed" : "in-progress";
-    let note = null;
-
-    if (apiComplete && probe && !probe.reachable) {
-      if (elapsed < REACHABILITY_WAIT_MS) {
-        status = "in-progress";
-        note = "Vultr reports running — waiting for the server to answer on the network…";
-      } else {
-        status = "unreachable";
-        note =
-          "Vultr reports the instance running, but it still does not answer on ports " +
-          probe.ports.map((p) => p.port).join(", ") +
-          ". Likely a host node or OS problem — consider raising a Vultr ticket.";
-      }
-    }
+    const { status, note } = settleWithReachability({ apiComplete, elapsedMs: elapsed, probe });
 
     return {
       action,

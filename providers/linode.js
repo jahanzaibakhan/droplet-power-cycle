@@ -1,11 +1,27 @@
 const fs = require("fs");
 const path = require("path");
+const { settleWithReachability, unreachableMessage } = require("../lib/reachability");
 
 const LINODE_API = "https://api.linode.com/v4";
 const PER_PAGE = 500;
 const CACHE_FILE = path.join(__dirname, "..", "data", "linode-cache.json");
 const LIST_FULL_LIMIT = 400;
 const CACHE_TTL_MS = 5 * 60 * 1000;
+/** X-Filter rejects "+or" and entity.id on /account/maintenance, so each active status is fetched separately. */
+const ACTIVE_MAINTENANCE_STATUSES = ["pending", "scheduled", "started", "in_progress"];
+const MAINTENANCE_TTL_MS = 5 * 60 * 1000;
+const TRANSITIONAL_STATUSES = {
+  booting: "Booting",
+  rebooting: "Rebooting",
+  shutting_down: "Shutting down",
+  provisioning: "Provisioning",
+  migrating: "Migrating",
+  rebuilding: "Rebuilding",
+  cloning: "Cloning",
+  restoring: "Restoring",
+  resizing: "Resizing",
+  deleting: "Deleting",
+};
 
 const ACTION_TYPES = {
   power_cycle: { path: (id) => `/linode/instances/${id}/reboot`, method: "POST", label: "power cycle" },
@@ -29,6 +45,11 @@ function createLinodeProvider(token) {
   let refreshInFlight = null;
   let cacheRefreshing = false;
   let cacheKnownTotal = null;
+  /** @type {Map<number, object[]>} */
+  let maintenanceByLinode = new Map();
+  let maintenanceFetchedAt = 0;
+  let maintenanceError = null;
+  let maintenanceInFlight = null;
 
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -100,8 +121,8 @@ function createLinodeProvider(token) {
       "Linode API request failed";
     if (status === 401 || status === 403) {
       return {
-        status: 401,
-        error: "Invalid or unauthorized Linode API token. Check LINODE_API_TOKEN.",
+        status: 403,
+        error: `Linode rejected the request (HTTP ${status}): ${message}. Check LINODE_API_TOKEN scopes.`,
       };
     }
     if (status === 429) {
@@ -110,7 +131,10 @@ function createLinodeProvider(token) {
     if (status === 404) {
       return { status: 404, error: message || "Linode not found." };
     }
-    return { status: status >= 400 ? status : 502, error: message };
+    if (status >= 500) {
+      return { status: 502, error: `Linode API error (HTTP ${status}): ${message}. Try again shortly.` };
+    }
+    return { status: status >= 400 ? status : 502, error: `Linode: ${message}` };
   }
 
   async function apiFetch(urlPath, options = {}, attempt = 0) {
@@ -128,7 +152,9 @@ function createLinodeProvider(token) {
       throw error;
     }
 
-    if ((res.status === 429 || res.status >= 500) && attempt < 6) {
+    const method = String(options.method || "GET").toUpperCase();
+    const retryable = res.status === 429 || (res.status >= 500 && method === "GET");
+    if (retryable && attempt < 6) {
       const waitMs = 1500 * (attempt + 1);
       console.warn(`Linode ${res.status} on ${urlPath} — retrying in ${waitMs}ms`);
       await sleep(waitMs);
@@ -357,9 +383,15 @@ function createLinodeProvider(token) {
     };
   }
 
-  function getActionStatus(action, instance, startedAt) {
+  function needsReachabilityCheck(action, instance, startedAt) {
+    if (action === "stop") return false;
+    return actionComplete(action, instance, Date.now() - startedAt);
+  }
+
+  function getActionStatus(action, instance, startedAt, probe) {
     const elapsed = Date.now() - startedAt;
-    const complete = actionComplete(action, instance, elapsed);
+    const apiComplete = actionComplete(action, instance, elapsed);
+    const { status, note } = settleWithReachability({ apiComplete, elapsedMs: elapsed, probe });
     return {
       action,
       instance_id: instance.id,
@@ -367,9 +399,128 @@ function createLinodeProvider(token) {
       instance_status: instance.status,
       power_status: instance.status === "running" ? "running" : "stopped",
       server_status: instance.status,
-      status: complete ? "completed" : "in-progress",
+      reachable: probe ? probe.reachable : null,
+      open_ports: probe ? probe.open_ports : null,
+      note,
+      status,
       elapsed_ms: elapsed,
     };
+  }
+
+  async function fetchActiveMaintenance() {
+    const next = new Map();
+    for (const status of ACTIVE_MAINTENANCE_STATUSES) {
+      let page = 1;
+      let pages = 1;
+      while (page <= pages && page <= 20) {
+        const qs = new URLSearchParams({ page: String(page), page_size: String(PER_PAGE) });
+        const { body } = await apiFetch(`/account/maintenance?${qs}`, {
+          headers: { "X-Filter": JSON.stringify({ status }) },
+        });
+        pages = body.pages || 1;
+        for (const m of body.data || []) {
+          if (!m.entity || m.entity.type !== "linode") continue;
+          const id = Number(m.entity.id);
+          if (!next.has(id)) next.set(id, []);
+          next.get(id).push({
+            type: m.type,
+            status: m.status,
+            reason: m.reason || "",
+            when: m.when || null,
+            start_time: m.start_time || null,
+            description: m.description || "",
+            source: m.source || "",
+            policy: m.maintenance_policy_set || "",
+          });
+        }
+        page += 1;
+      }
+    }
+    maintenanceByLinode = next;
+    maintenanceFetchedAt = Date.now();
+    maintenanceError = null;
+    return next;
+  }
+
+  function refreshMaintenance() {
+    if (maintenanceInFlight) return maintenanceInFlight;
+    maintenanceInFlight = fetchActiveMaintenance()
+      .catch((err) => {
+        maintenanceError = err.message;
+        console.error("Linode maintenance refresh failed:", err.message);
+        throw err;
+      })
+      .finally(() => {
+        maintenanceInFlight = null;
+      });
+    return maintenanceInFlight;
+  }
+
+  async function maintenanceFor(linodeId) {
+    try {
+      if (!maintenanceFetchedAt) await refreshMaintenance();
+      else if (Date.now() - maintenanceFetchedAt > MAINTENANCE_TTL_MS) refreshMaintenance().catch(() => {});
+    } catch (err) {
+      return { items: [], error: err.message };
+    }
+    const items = (maintenanceByLinode.get(Number(linodeId)) || []).slice();
+    items.sort((a, b) => String(a.when || "").localeCompare(String(b.when || "")));
+    return { items, error: maintenanceError };
+  }
+
+  function startMaintenanceRefresh() {
+    refreshMaintenance().catch(() => {});
+    setInterval(() => refreshMaintenance().catch(() => {}), MAINTENANCE_TTL_MS).unref();
+  }
+
+  function assessHealth(instance, probe, maintenance) {
+    const status = String(instance.status || "").toLowerCase();
+    const items = maintenance || [];
+    const active = items.find((m) => m.status === "started" || m.status === "in_progress");
+    const upcoming = items.find((m) => m.status === "scheduled" || m.status === "pending");
+    const api = `API: status ${status || "?"}`;
+
+    let level = "ok";
+    let label = "Healthy";
+    let message = "Linode reports the server running and it answers on the network.";
+
+    if (active) {
+      level = "warn";
+      label = "Maintenance";
+      message = `Linode maintenance is in progress (${active.type}): ${String(active.reason || "platform maintenance").trim().replace(/\.+$/, "")}.`;
+    } else if (status === "billing_suspension") {
+      level = "down";
+      label = "Suspended";
+      message = "Linode has suspended this server for billing reasons.";
+    } else if (status === "offline" || status === "stopped") {
+      level = "stopped";
+      label = "Stopped";
+      message = "The server is powered off. Use Start to boot it.";
+    } else if (TRANSITIONAL_STATUSES[status]) {
+      level = "info";
+      label = TRANSITIONAL_STATUSES[status];
+      message = `Linode reports the server is ${TRANSITIONAL_STATUSES[status].toLowerCase()}.`;
+    } else if (status === "running" && probe && !probe.reachable) {
+      level = "down";
+      label = "Unreachable";
+      message = unreachableMessage(probe, "Linode");
+    } else if (status && status !== "running") {
+      level = "warn";
+      label = "Degraded";
+      message = `Linode reports status "${status}".`;
+    }
+
+    if (upcoming && !active) {
+      const when = upcoming.when ? new Date(upcoming.when + (/Z|[+-]\d\d:?\d\d$/.test(upcoming.when) ? "" : "Z")) : null;
+      const reason = String(upcoming.reason || "platform maintenance").trim().replace(/\.+$/, "");
+      message += ` Upcoming maintenance (${upcoming.type}${when ? ", " + when.toISOString().replace("T", " ").slice(0, 16) + " UTC" : ""}): ${reason}.`;
+      if (level === "ok") {
+        level = "info";
+        label = "Maintenance scheduled";
+      }
+    }
+
+    return { level, label, message, api };
   }
 
   function health() {
@@ -422,7 +573,11 @@ function createLinodeProvider(token) {
     fetchInstanceById,
     summarize,
     runAction,
+    needsReachabilityCheck,
     getActionStatus,
+    assessHealth,
+    maintenanceFor,
+    startMaintenanceRefresh,
     health,
     listResponse,
     startBackgroundRefresh,
